@@ -1,0 +1,318 @@
+---
+title: "core_microbiota"
+author: "Ming Yan"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_download: true
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# Load libraries
+```{r}
+library(tidyverse)
+library(data.table)
+```
+
+# Load data
+```{r}
+# genus level kraken2/bracken results
+microbe_genus <- fread("microbial_genus_profile.tsv", header = TRUE) # taxaid is customized, where taxaid > 4294860312 representing taxa that is not represented in the GTDB R207
+metadata <- read_csv("metadata_ecology.csv")
+metadata_performance <- read_csv("metadata_animal_performance.csv")
+metadata_concentrate <- read_csv("metadata_concentrate_level.csv")
+
+# reorder columns
+colnames(microbe_genus)[1] <- "Genera"
+taxa_rank <- c("Domain", "Phylum", "Class", "Order", "Family", "Genera", "taxaid")
+metadata_var <- c("species", "beef_or_dairy", "grazing_or_not", "collection_method", "geography", "project")
+sampleid <- colnames(microbe_genus)[!colnames(microbe_genus) %in% taxa_rank]
+sample_performane <- metadata_performance$id
+new_order <- c(taxa_rank, sampleid)
+microbe_genus <- setcolorder(microbe_genus, new_order) # special case for data.table
+
+# recalculate percentage (only bracken results > 0.00001 was kept so total percentage might not sum up 100%)
+microbe_genus_abundance <- copy(microbe_genus)
+total_percentage <- microbe_genus_abundance %>% select(sampleid) %>% colSums() # average 98%
+microbe_genus_abundance[,(sampleid):= lapply(.SD,function(x) x/sum(x)*100), .SDcols = sampleid]
+
+# change to prevelance 
+microbe_genus[, (sampleid):=lapply(.SD, as.numeric), .SDcols  = sampleid] # note the parenthesis around sampleid
+microbe_genus_prevelance <- microbe_genus[, (sampleid):=lapply(.SD, function(x) ifelse(x>0, 1, 0)), .SDcols = sampleid]
+microbe_genus_prevelance$prevelance <- microbe_genus_prevelance %>% select(sampleid) %>% rowSums()
+microbe_genus_prevelance$prevelance <- microbe_genus_prevelance$prevelance/976*100
+microbe_genus_prevelance <- setcolorder(microbe_genus_prevelance, c(taxa_rank, "prevelance", sampleid))
+
+```
+
+# Load data species level
+```{r}
+# species level kraken2/bracken results
+microbe_species <- fread("microbial_species_profile.tsv", header = TRUE)
+
+# reorder columns
+colnames(microbe_species)[1] <- "Species"
+taxa_rank_species <- c("Domain", "Phylum", "Class", "Order", "Family", "Genera", "Species", "taxaid")
+new_order_species <- c(taxa_rank_species, sampleid)
+microbe_species <- setcolorder(microbe_species, new_order_species) # special case for data.table
+
+# recalculate percentage (only bracken results > 0.00001 was kept so total percentage might not sum up 100%)
+microbe_species_abundance <- copy(microbe_species)
+total_percentage_species <- microbe_species_abundance %>% select(sampleid) %>% colSums()
+microbe_species_abundance[,(sampleid):= lapply(.SD,function(x) x/sum(x)*100), .SDcols = sampleid]
+
+# change to prevelance 
+microbe_species[, (sampleid):=lapply(.SD, as.numeric), .SDcols  = sampleid] # note the parenthesis around sampleid
+microbe_species_prevelance <- microbe_species[, (sampleid):=lapply(.SD, function(x) ifelse(x>0, 1, 0)), .SDcols = sampleid]
+microbe_species_prevelance$prevelance <- microbe_species_prevelance %>% select(sampleid) %>% rowSums()
+microbe_species_prevelance$prevelance <- microbe_species_prevelance$prevelance/length(sampleid)*100
+microbe_species_prevelance <- setcolorder(microbe_species_prevelance, c(taxa_rank_species, "prevelance", sampleid))
+```
+
+
+# get core (100%) and common (50%) taxa 
+```{r}
+core_genera <- microbe_genus_prevelance[prevelance == 100, Genera]
+
+common_genera <- microbe_genus_prevelance[prevelance > 50, Genera]
+
+core_species <- microbe_species_prevelance[prevelance == 100, Species]
+
+common_species <- microbe_species_prevelance[prevelance > 50, Species]
+
+core_genera_total_abundance <- microbe_genus_abundance[Genera %in% core_genera] %>% as.data.frame() %>% select(sampleid) %>% colSums()
+
+core_species_total_abundance <- microbe_species_abundance[Genera %in% common_species] %>% as.data.frame() %>% select(sampleid) %>% colSums()
+```
+
+
+# core genera abundance, median abundance (log10) > -1 or contain core species
+```{r}
+core_genus_abundance <- microbe_genus_abundance[Genera %in% core_genera] %>% pivot_longer(cols = sampleid, names_to = "sampleid", values_to = "log10_abundance")
+core_genus_abundance$log10_abundance <- log10(core_genus_abundance$log10_abundance)
+core_species_abundance <- microbe_species_abundance[Species %in% core_species] %>% pivot_longer(cols = sampleid, names_to = "sampleid", values_to = "log10_abundance")
+core_species_abundance$log10_abundance <- log10(core_species_abundance$log10_abundance)
+
+# rank medium abundance
+core_genus_abundance_summary <- core_genus_abundance %>% group_by(Genera) %>% summarise(median_log_abundance = median(log10_abundance), max_log_abundance = max(log10_abundance), min_log_abundance = min(log10_abundance)) %>% arrange(median_log_abundance)
+abundant_core_genera  <- core_genus_abundance_summary %>% filter(median_log_abundance > -1 | Genera %in% unique(core_species_abundance$Genera)) %>% select(Genera) %>% unlist() # median relative abundance > 0.1%
+less_abundant_core_genera  <- core_genus_abundance_summary %>% filter(!Genera %in% abundant_core_genera ) %>% select(Genera) %>% unlist() # median relative abundance > 0.1%
+median_core_genera_ordered <- core_genus_abundance_summary$Genera 
+
+
+# define color palette for both abundant and less abundant core genera. 
+phylum_levels <- unique(core_genus_abundance$Phylum)
+phylum_palette <- c("#e3af14", "#5ed14f", "#42f5d7", "#0092FF", "#4900FF", "#bf00ff", "#FF00DB", "#ff4000", "#ff8400")
+names(phylum_palette) <- phylum_levels
+
+core_genus_abundance_abundant <- core_genus_abundance %>% filter(Genera %in% abundant_core_genera) %>% 
+  mutate(Genera = factor(Genera, levels = median_core_genera_ordered), Phylum = factor(Phylum, levels = phylum_levels)) 
+
+core_genus_abundance_abundant$core_species <- ifelse(core_genus_abundance_abundant$Genera %in% unique(core_species_abundance$Genera), "*", "") ## for adding annotation later
+
+core_genus_abundance_abundant %>%  
+  ggplot(aes(x=log10_abundance, y=Genera)) + 
+  geom_point(aes(colour = Phylum)) + 
+  scale_colour_manual(values = phylum_palette, limits = unique(core_genus_abundance %>% filter(Genera %in% abundant_core_genera) %>% select(Phylum) %>% unlist())) + # use limits in scale_colour_manual to display only existed variable, drop = TRUE doesn't work in this version 
+  geom_boxplot(outlier.shape = NA, fill = "#f2f6fc") +
+  labs(x = "Relative abundance % (log10)", y = "core genera") +
+  scale_x_continuous(expand = c(0,0), limits = c(-3.1,2)) +
+  expand_limits(y = c(0,43)) + 
+  geom_text(aes( x = -3, y = Genera, label = core_species), colour = "red", size = 5, vjust = 0.8) +  # add "*" if core species present in genera; vjust to align "*" with ticks 
+  theme(legend.position = "bottom") + 
+  theme(legend.title = element_blank()) + 
+  guides(color=guide_legend(nrow=3,byrow=TRUE))
+            
+ggsave("core_genus_abundance_abundant.svg", width = 4.5, height = 7, units = "in")
+
+```
+
+
+
+# less abundant core genus
+```{r}
+core_genus_abundance_less <- core_genus_abundance %>% filter(Genera %in% less_abundant_core_genera) %>% 
+  mutate(Genera = factor(Genera, levels = median_core_genera_ordered), Phylum = factor(Phylum, levels = phylum_levels)) 
+
+core_genus_abundance_less$core_species <- ifelse(core_genus_abundance_less$Genera %in% unique(core_species_abundance$Genera), "*", "") ## for adding annotation later
+
+core_genus_abundance_less %>% filter(Genera %in% less_abundant_core_genera) %>% 
+  mutate(Genera = factor(Genera, levels = median_core_genera_ordered), Phylum = factor(Phylum, levels = phylum_levels)) %>%  
+  ggplot(aes(x=log10_abundance, y=Genera)) + 
+  geom_point(aes(colour = Phylum)) + 
+  scale_colour_manual(values = phylum_palette, limits = unique(core_genus_abundance %>% filter(Genera %in% less_abundant_core_genera) %>% select(Phylum) %>% unlist())) + # use limits in scale_colour_manual to display only existed variable, drop = TRUE doesn't work in this version 
+  geom_boxplot(outlier.shape = NA, fill = "#f2f6fc") +
+  labs(x = "Relative abundance % (log10)") +
+  scale_x_continuous(expand = c(0.1,0)) + 
+  geom_text(aes( x = -3, y = Genera, label = core_species), colour = "red", size = 5) + # add "*" if core species present in genera
+  scale_x_continuous(expand = c(0,0), limits = c(-3.1,2)) +
+   theme(legend.position = "bottom") + 
+  theme(legend.title = element_blank()) + 
+  guides(color=guide_legend(nrow=3,byrow=TRUE))
+
+ggsave("core_genus_abundance_rare.svg", width = 4.5, height = 7, units = "in")
+```
+
+# core species
+```{r}
+# rank medium abundance
+core_species_abundance_summary <- core_species_abundance %>% group_by(Species) %>% summarise(median_log_abundance = median(log10_abundance), max_log_abundance = max(log10_abundance), min_log_abundance = min(log10_abundance)) %>% arrange(median_log_abundance)
+median_core_species_ordered <- core_species_abundance_summary$Species 
+
+
+# define color palette for both abundant and less abundant core genera. 
+genera_levels <- unique(core_species_abundance$Genera)
+genera_palette <- c("#e3af14", "#5ed14f", "#42f5d7", "#0092FF", "#4900FF", "#bf00ff")
+names(genera_palette) <- genera_levels
+
+core_species_abundance %>%  
+  mutate(Species = factor(Species, levels = median_core_species_ordered), Genera = factor(Genera, levels = genera_levels)) %>%  
+  ggplot(aes(x=log10_abundance, y=Species)) + 
+  geom_point(aes(colour = Genera)) + 
+  scale_colour_manual(values = genera_palette, limits = unique(core_species_abundance  %>% select(Genera) %>% unlist())) + # use limits in scale_colour_manual to display only existed variable, drop = TRUE doesn't work in this version 
+  geom_boxplot(outlier.shape = NA, fill = "#f2f6fc") +
+  labs(x = "Relative abundance % (log10)", y = "core species") +
+  theme(legend.position = "bottom") + 
+  theme(legend.title = element_blank()) + 
+  guides(color=guide_legend(nrow=3,byrow=TRUE))
+
+ggsave("core_species_abundance.svg", width = 4.5, height = 7, units = "in")
+```
+
+# plot prevelance of core genera
+```{r}
+microbe_genus_prevelance %>% ggplot(aes(x = prevelance)) +
+  geom_density() +
+ geom_histogram(aes(y=after_stat(density)), colour="black", fill="white", bins = 20) +
+  theme_minimal()
+
+
+microbe_genus_prevelance_df <- microbe_genus_prevelance %>% select(-sampleid)
+microbe_species_prevelance_df <- microbe_species_prevelance %>% select(-sampleid)
+#write_csv(microbe_genus_prevelance_df, "microbe_genus_prevelance_df.csv")
+#write_csv(microbe_species_prevelance_df, "microbe_species_prevelance_df.csv")
+```
+
+# iterate to check core genera. Are there enough samples to reach plauteu 
+```{r}
+genus_iterate <- read_csv("core_genus_iteration_res.csv")
+
+colnames(genus_iterate)[1] <- "iteration"
+genus_iterate <- genus_iterate %>% pivot_longer(cols = !iteration, names_to = "Sample", values_to = "ncore") %>% mutate(Sample = as.numeric(Sample))
+
+genus_iterate_range <- genus_iterate %>% group_by(Sample) %>% summarise(Min = min(ncore), Max = max(ncore), Mean = mean(ncore)) 
+genus_iterate_plot <- left_join(genus_iterate, genus_iterate_range, by="Sample")
+
+genus_iterate_plot %>% ggplot(aes(x=Sample, y=ncore, ymin = Min, ymax = Max, group = iteration)) + 
+  geom_ribbon(fill = "grey70", alpha = 0.4) + geom_line(aes(x = Sample, y=Mean), color = "red") +
+  scale_x_continuous(breaks = seq(min(genus_iterate_plot$Sample), max(genus_iterate_plot$Sample), by = 100), limits = c(100, 970), expand = c(0,0)) +  # expand to remove extra space outside of the limit
+  labs(x = "Number of samples", y = "Number of core genera") +
+#theme(axis.text.x = element_text(angle = 90)) + 
+ theme_minimal()
+
+ggsave("core_genus_iterration.svg", width = 4.5, height = 3.5, units = "in")
+```
+
+# iterate to check core species
+```{r}
+species_iterate <- read_csv("core_species_iteration_res.csv")
+
+colnames(species_iterate)[1] <- "iteration"
+species_iterate <- species_iterate %>% pivot_longer(cols = !iteration, names_to = "Sample", values_to = "ncore") %>% mutate(Sample = as.numeric(Sample))
+
+species_iterate_range <- species_iterate %>% group_by(Sample) %>% summarise(Min = min(ncore), Max = max(ncore), Mean = mean(ncore)) 
+species_iterate_plot <- left_join(species_iterate, species_iterate_range, by="Sample")
+
+species_iterate_plot %>% ggplot(aes(x=Sample, y=ncore, ymin = Min, ymax = Max, group = iteration)) + 
+  geom_ribbon(fill = "grey70", alpha = 0.4) + geom_line(aes(x = Sample, y=Mean), color = "red") +
+  scale_x_continuous(breaks = seq(min(genus_iterate_plot$Sample), max(genus_iterate_plot$Sample), by = 100), limits = c(100, 970), expand = c(0,0)) +  # expand to remove extra space outside of the limit
+  labs(x = "Number of samples", y = "Number of core species") + 
+  #theme(axis.text.x = element_text(angle = 90)) + 
+  theme_minimal()
+
+ggsave("core_species_iterration.svg", width = 4.5, height = 3.5, units = "in")
+```
+
+# prepare data for DAA, only core
+```{r}
+core_species <- core_species_abundance %>% filter(sampleid %in% sample_performane) %>% mutate(abundance = 10^log10_abundance/100) %>% 
+  select(-log10_abundance) %>% select(-c(Domain, Phylum, Class, Order, Family, Genera, taxaid)) %>% pivot_wider(names_from = Species, values_from = abundance)
+
+core_genus_abundancea_performance <- core_genus_abundance %>% filter(sampleid %in% sample_performane) %>% mutate(abundance = 10^log10_abundance/100) %>% select(-log10_abundance) %>% 
+   select(-c(Domain, Phylum, Class, Order, Family, taxaid)) %>% pivot_wider(names_from = Genera, values_from = abundance)
+
+core_species_taxa <- core_species_abundance %>% select(Domain, Phylum, Class, Order, Family, Genera, Species) %>% unique()
+
+core_genus_taxa <- core_genus_abundance %>% select(Domain, Phylum, Class, Order, Family, Genera) %>% unique()
+
+write_csv(core_genus_abundancea_performance, "core_genus_abundance_animal_performance.csv")
+write_csv(core_species, "core_species_abundance_animal_performance.csv")
+write_csv(core_species_taxa, "core_species_taxa.csv")
+write_csv(core_genus_taxa, "core_genus_taxa.csv")
+```
+
+# prepare data for DAA, all
+```{r}
+sample_performane <- intersect(sample_performane, sampleid)
+sample_performane_genus_columns <- c("Genera", sample_performane)
+sample_performane_species_columns <- c("Species", sample_performane)
+
+# get taxa
+genus_taxa <- microbe_genus_abundance %>% select(Domain, Phylum, Class, Order, Family, Genera,taxaid) %>% unique()
+species_taxa <- microbe_species_abundance %>% select(Domain, Phylum, Class, Order, Family, Genera, Species, taxaid) %>% unique()
+
+# change to relative abundance and transpose (for Maaslin)
+microbe_genus_abundance_df <- microbe_genus_abundance[, (sampleid) := .SD/100, .SDcols = sampleid] %>% as.data.frame()
+microbe_genus_abundance_df_performance <- microbe_genus_abundance_df %>% select(sample_performane_genus_columns)
+write_csv(microbe_genus_abundance_df_performance, "full_genus_abundance_animal_performance_linda.csv") # for linda
+
+
+rownames(microbe_genus_abundance_df_performance) <- microbe_genus_abundance_df_performance[,1]
+microbe_genus_abundance_df_performance[,1] <- NULL 
+rownames_t <- colnames(microbe_genus_abundance_df_performance)
+colnames_t <- rownames(microbe_genus_abundance_df_performance)
+microbe_genus_abundance_df_performance_t <- transpose(microbe_genus_abundance_df_performance)
+rownames(microbe_genus_abundance_df_performance_t) <- rownames_t
+colnames(microbe_genus_abundance_df_performance_t) <- colnames_t
+
+# repeat for species level
+microbe_species_abundance_df <- microbe_species_abundance[, (sampleid) := .SD/100, .SDcols = sampleid] %>% as.data.frame()
+microbe_species_abundance_df_performance <- microbe_species_abundance_df %>% select(sample_performane_species_columns)
+write_csv(microbe_species_abundance_df_performance, "full_species_abundance_animal_performance_linda.csv") # for linda
+rownames(microbe_species_abundance_df_performance) <- microbe_species_abundance_df_performance[,1]
+microbe_species_abundance_df_performance[,1] <- NULL 
+rownames_t <- colnames(microbe_species_abundance_df_performance)
+colnames_t <- rownames(microbe_species_abundance_df_performance)
+microbe_species_abundance_df_performance_t <- transpose(microbe_species_abundance_df_performance)
+rownames(microbe_species_abundance_df_performance_t) <- rownames_t
+colnames(microbe_species_abundance_df_performance_t) <- colnames_t
+
+# write to csv
+#write_csv(microbe_genus_abundance_df_performance_t, "full_genus_abundance_animal_performance.csv")
+#write_csv(microbe_species_abundance_df_performance_t, "full_species_abundance_animal_performance.csv")
+
+#write_csv(species_taxa, "species_taxa.csv")
+#write_csv(genus_taxa, "genus_taxa.csv")
+
+```
+
+
+# session info
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+
+
+

@@ -1,0 +1,141 @@
+---
+title: "Core microbiota DAA"
+author: "Ming Yan"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+# Load libraries
+```{r}
+library(tidyverse)
+library(gtools) 
+library(phyloseq)
+library(data.table)
+```
+
+
+# load data
+```{r}
+# metadata
+metadata <- read.csv("metadata_animal_performance.csv")
+host_infor <- read_tsv("/fs/ess/PAS0439/MING/virome/checkv_trimmed_for_dowmstream/host_prediction/output/results/host_match.tsv")
+
+# microbiome daa
+linda_species_out <- read.csv("linda_species_out.csv")
+
+
+linda_virome <- read.csv("linda_virome_out.csv")
+linda_virome_host_info <- left_join(linda_virome, host_infor, by = c("rowname" = "sseqid")) 
+linda_virome_host_info[c("domain", "phylum", "class", "order", "family", "genus", "species")] <- linda_virome_host_info %>% select(c(domain, phylum, class, order, family, genus, species)) %>% lapply(function(x) str_replace(x,'[a-z]__', '')) 
+# remove duplicated host prediction res (same taxa different genome)
+linda_virome_host_info$qseqid <- NULL 
+linda_virome_host_info <- linda_virome_host_info %>% distinct()
+# fill unclassified taxa
+for (f in 1:nrow(linda_virome_host_info)){
+  if (is.na(linda_virome_host_info[f,"species"]) == FALSE & linda_virome_host_info[f,"species"] == ""){
+    linda_virome_host_info[f,"species"] = paste("Unclassified", linda_virome_host_info[f,"genus"])
+}}
+```
+
+
+
+```{r}
+q_threshold <- 0.1
+linda_virome_host_info <- linda_virome_host_info %>% filter(padj < q_threshold)
+linda_virome_host_info$lowerlimit <- linda_virome_host_info$log2FoldChange - linda_virome_host_info$lfcSE
+linda_virome_host_info$upperlimit <- linda_virome_host_info$log2FoldChange + linda_virome_host_info$lfcSE
+
+project_levels <- linda_virome_host_info %>% select(project)  %>% unlist() %>% unique()
+linda_virome_host_info %>% mutate(project = factor(project, levels = project_levels))
+sig_votu <- linda_virome_host_info %>% group_by(project, rowname) %>% arrange(log2FoldChange) %>% ungroup() %>% select(rowname) %>% unique() %>% unlist()
+#linda_virome_host_info <- linda_virome_host_info %>% mutate(rowname = factor(rowname, levels = unique(sig_votu)))
+
+
+virome_daa <- linda_virome_host_info %>% ggplot() + geom_point(aes(y = rowname, x = log2FoldChange, color = project)) + geom_segment(aes(y = rowname, yend = rowname, x=lowerlimit , xend=upperlimit)) + geom_vline(xintercept = 0, linetype = "dashed", color = "red") + theme(legend.position = "bottom")  + scale_x_continuous(limits = c(-5.5, 7.5),  expand = c(0, 0)) +facet_wrap(~ project, nrow = 1)
+
+virome_daa
+```
+
+
+```{r}
+# https://stackoverflow.com/questions/7705345/how-can-i-extract-plot-axes-ranges-for-a-ggplot2-object
+# trick to extract axis range
+daa_y_axis <- layer_scales(virome_daa)$y$range$range 
+```
+
+```{r}
+linda_virome_host_daa <- linda_virome_host_info[c("rowname", "species", "project", "note", "treatment1", "treatment2")] %>% left_join(linda_species_out, by = c("species" = "rowname", "project", "note", "treatment1", "treatment2")) 
+
+linda_virome_host_daa$lowerlimit <- linda_virome_host_daa$log2FoldChange - linda_virome_host_daa$lfcSE
+linda_virome_host_daa$upperlimit <- linda_virome_host_daa$log2FoldChange + linda_virome_host_daa$lfcSE
+#linda_virome_host_daa <- linda_virome_host_daa %>% filter(!is.na(linda_virome_host_daa$species))
+
+host_levels <- linda_virome_host_daa %>% filter(!is.na(log2FoldChange)) %>% select(species) %>% unique() %>% unlist()
+
+linda_virome_host_daa %>% mutate(rowname = factor(rowname, levels = daa_y_axis)) %>% ggplot() + geom_point(aes(y = rowname, x = log2FoldChange, color = species)) + geom_segment(aes(y = rowname, yend = rowname, x=lowerlimit , xend=upperlimit)) + geom_vline(xintercept = 0, linetype = "dashed", color = "red") + theme(legend.position = "bottom") + facet_wrap(~ project, nrow = 1) +
+  scale_color_discrete(limits = host_levels)
+```
+
+
+```{r}
+linda_virome_host_daa$type <- "Microbes"
+linda_virome_host_info$type <- "vOTU"
+colnames_tmp <- colnames(linda_virome_host_daa)
+daa_virome_host_combined <- rbind(linda_virome_host_info[colnames_tmp], linda_virome_host_daa)
+
+# add host taxa to vOTU name
+for (f in 1:nrow(daa_virome_host_combined)){
+  if ( is.na(daa_virome_host_combined[f,"species"]) == FALSE ){
+    daa_virome_host_combined[f,"rowname"] =  paste(daa_virome_host_combined[f,"rowname"], " (",  daa_virome_host_combined[f,"species"], ")", sep = "")
+  }
+  else {
+    daa_virome_host_combined[f,"rowname"] =  paste(daa_virome_host_combined[f,"rowname"], " (Host unknown)", sep = "")
+  }
+}
+
+# change facet name
+daa_virome_host_combined$rowname <- factor(daa_virome_host_combined$rowname)
+daa_virome_host_combined <-daa_virome_host_combined %>% left_join(metadata[c("study", "trait", "liter")], by = c("project" = "study"))
+daa_virome_host_combined$treatment <- paste(daa_virome_host_combined$treatment1, daa_virome_host_combined$treatment2, sep = " vs. ")
+daa_virome_host_combined[daa_virome_host_combined$project == "PRJEB33080", "trait"] <- "Milk SAFA"
+
+# Linda treatment alphabetic order, reorder
+daa_virome_host_combined[daa_virome_host_combined$project  == "PRJEB21624", "treatment"] <- "High vs. Medium"
+daa_virome_host_combined[daa_virome_host_combined$project  == "PRJEB23561", "treatment"] <- "Grazing vs. TMR"
+daa_virome_host_combined[daa_virome_host_combined$project  == "PRJNA448333", "treatment"] <- "High vs. Low"
+# plot, filter PRJEB33080 because milk SFA not an interested trait
+daa_virome_host_combined_plot <- daa_virome_host_combined %>% filter(project != "PRJEB33080") %>% ggplot() + geom_point(aes(y = rowname, x = log2FoldChange, color = factor(type))) + geom_segment(aes(y = rowname, yend = rowname, x=lowerlimit , xend=upperlimit, color = type)) + geom_vline(xintercept = 0, linetype = "dashed", color = "red") + theme(legend.position = "bottom") + facet_wrap(vars(trait,  treatment), nrow = 1, scales = "free_x" ) + theme(legend.title=element_blank()) + labs(y = "") +
+  theme(axis.text.x = element_text(size=8))
+ 
+daa_virome_host_combined_plot
+```
+
+```{r}
+anno_df <- tibble(trait = c("Concentrate level", "Methane emission"), treatment = c("High vs. Medium", "High vs. Low"))
+daa_virome_host_combined_plot_final <- daa_virome_host_combined_plot +  ## add arrow to show significant host daa
+  geom_segment(data = anno_df, x= c(-1.674, -1.326), xend = c(-1.674, -1.326), y = c(18,13), yend = c(19.6,14.6), arrow = arrow(length = unit(0.2, "cm")), color = "red") 
+
+daa_virome_host_combined_plot_final
+
+ggsave("virome_daa.svg", width = 10, height = 6)
+```
+
+# session info
+```{r}
+sessionInfo()
+```
+
+
+
+
+

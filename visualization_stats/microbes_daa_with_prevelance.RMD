@@ -1,0 +1,77 @@
+---
+title: "DAA_microbes_prevelance"
+author: "Ming Yan"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+# Load libraries
+```{r}
+library(tidyverse)
+library(gtools) 
+library(phyloseq)
+library(data.table)
+```
+
+
+# load data
+```{r}
+# metadata
+metadata <- read.csv("metadata_animal_performance.csv")
+
+# microbiome daa
+linda_species_out <- read.csv("linda_species_out.csv")
+
+prevelance <- read.csv("microbe_species_prevelance_df.csv")
+
+```
+
+
+```{r}
+linda_species_out_prevelance <- linda_species_out %>% left_join(prevelance[c("Species", "prevelance")], by =c("rowname" = "Species"))
+
+linda_species_out_prevelance_full <- linda_species_out_prevelance %>% left_join(metadata[c("study", "liter", "trait")], by =c("project" = "study"))
+
+core_common <- function(x){
+  if (x == 100){
+   return("100%")
+  }
+  else if (x >= 50){
+    return("> 50%")
+  }
+  else if (x >= 20){
+    return("> 20%")
+  }
+  else {
+    return ("< 20%")
+  }
+}
+
+plot_ready <- linda_species_out_prevelance_full %>% mutate(prevelance = sapply(prevelance, core_common))
+
+plot_final <- plot_ready  %>% filter(padj < 0.1) %>% ggplot() + geom_point(aes(x = log2FoldChange, y = log10(padj), color = prevelance)) + 
+  facet_wrap(vars(liter, trait), scales = "free", labeller = function (labels) {   # reduce space between the facet legend 
+               labels <- lapply(labels, as.character)           
+               list(do.call(paste, c(labels, list(sep = "\n"))))
+             })  +  scale_y_reverse() + geom_hline(yintercept=-1.3, linetype="dashed", 
+                color = "red", size=1) + labs(y = "log10(q)") + 
+  scale_color_discrete(name = "Prevelance") + theme_minimal() +
+  theme(legend.position = "bottom") 
+  
+plot_final
+ggsave("daa_volcano.svg", width = 9, height = 6)
+```
+# session info
+```{r}
+sessionInfo()
+```

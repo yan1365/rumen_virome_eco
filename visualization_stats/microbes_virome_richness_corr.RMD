@@ -1,0 +1,130 @@
+---
+title: "Richness corr"
+author: "Ming Yan"
+date: "1/3/2023"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_download: true
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+# Load libraries
+```{r}
+library(tidyverse)
+library(data.table)
+library(RColorBrewer)
+library(cowplot)
+```
+
+# load data
+```{r}
+## metadata
+metadata <- read_csv("metadata_animal_performance.csv")
+metadata_all <- read_csv("metadata_ecology.csv")
+
+## virome richness
+raw_table <- fread('abundance_table_raw.csv')  ## use data table to improve speed
+bp <- read.csv('samples_basepair.txt', header = FALSE, sep = '\t') 
+colnames(bp) <- c("samples", "bp")
+samples <- unlist(bp["samples"])
+richness_raw <- colSums(raw_table[, ..samples] > 0) %>% transform()
+colnames(richness_raw) <- "virome_richness"
+richness_raw <- rownames_to_column(richness_raw, var = "samples")
+
+virome_richness <- left_join(richness_raw, bp, by="samples")
+virome_richness["virome_richness_normalized"] = virome_richness["virome_richness"]/virome_richness["bp"]*1000000000 ## normalizing the richness profile to the same sequencing effort 
+
+## microbes richness
+microbe_species <- fread("microbial_species_profile.tsv", header = TRUE)
+colnames(microbe_species)[1] <- "Species"
+taxa_rank_species <- c("Domain", "Phylum", "Class", "Order", "Family", "Genera", "Species", "taxaid")
+sampleid <- colnames(microbe_species)[!colnames(microbe_species) %in% taxa_rank_species]
+new_order_species <- c(taxa_rank_species, sampleid)
+microbe_species <- setcolorder(microbe_species, new_order_species) # special case for data.table
+microbe_species[, (sampleid):= lapply(.SD, function(x) ifelse(x > 0, 1, 0)), .SDcols = sampleid]
+microbes_richness <- microbe_species %>% select(sampleid) %>% apply(2,sum) %>% as.data.frame()
+colnames(microbes_richness) <- "micro_richness"
+microbes_richness <- microbes_richness %>% rownames_to_column("samples")
+
+## combine
+richness_combined <- microbes_richness %>% left_join(virome_richness[c("samples", "virome_richness", "virome_richness_normalized")], by = "samples")
+richness_performance <- richness_combined %>% right_join(metadata, by = c("samples" = "id"))
+richness_all <- richness_combined %>% right_join(metadata_all, by = c("samples" = "id"))
+```
+# annotation
+```{r}
+corr <- richness_performance %>% group_by(study) %>% summarise(p = cor.test(micro_richness, virome_richness_normalized, method = "spearman")$p.value, r = cor.test(micro_richness, virome_richness_normalized, method = "spearman")$estimate)
+
+corr_anno <- corr %>% left_join(metadata[names(metadata) %in% c("study", "trait", "liter")], by = "study") %>% distinct()
+
+corr_anno$p <-  paste("p = ", format(corr_anno$p, digits = 2), sep = "") 
+corr_anno$r <- paste("r = ", format(corr_anno$r, digits = 2), sep = "") 
+corr_anno
+```
+
+# visualization
+```{r}
+#corr_plot<- richness_performance %>% ggplot() + geom_point(aes(x = micro_richness, y = virome_richness_normalized, color = treatment)) + 
+#  facet_wrap(vars(liter,trait), scales = "free",labeller = function (labels) {   # reduce space between the facet legend 
+#               labels <- lapply(labels, as.character)           
+#               list(do.call(paste, c(labels, list(sep = "\n"))))
+#             }) +  
+#  geom_smooth(aes(x = micro_richness, y= virome_richness_normalized),  method='lm') + 
+#  theme_minimal() + 
+#  scale_color_brewer(palette = "Paired") + 
+#  scale_color_discrete(name = "Treatment") 
+
+
+function_corr <- function(literature){
+  richness_performance %>% filter(liter == literature) %>%
+    ggplot() + geom_point(aes(x = micro_richness, y = virome_richness_normalized, color = treatment)) + 
+  facet_wrap(vars(liter,trait), scales = "free",labeller = function (labels) {   # reduce space between the facet legend 
+               labels <- lapply(labels, as.character)           
+               list(do.call(paste, c(labels, list(sep = "\n"))))
+             }) +  
+  geom_smooth(aes(x = micro_richness, y= virome_richness_normalized),  method='lm') + 
+  theme_minimal() + 
+    labs(x = "Microbial richness", y = "Viral richness" ) + 
+  scale_color_brewer(palette = "Paired") + 
+  scale_color_discrete(name = "Treatment")  +
+    theme(legend.position = "bottom") +
+    theme(legend.title = element_blank(), 
+               legend.text = element_text(size = 8)) +
+    theme(legend.margin=margin(0,0,0,0),  ## reduce space between the legend and the figure
+        legend.box.margin=margin(-10,-10,-10,-10)) +
+    theme(axis.title=element_text(size=8))+
+   geom_text(
+  data    = corr_anno[corr_anno$liter == literature, ],
+  mapping = aes(x = Inf, y = Inf, label = p),
+  hjust   = 1,
+  vjust   = 1,
+  size = 3) +
+  geom_text(
+  data    = corr_anno[corr_anno$liter == literature, ],
+  mapping = aes(x = Inf, y = Inf, label = r),
+  hjust   = 1.4,
+  vjust   = 2.2,
+  size = 3) 
+}
+
+corr_plots <- lapply(unique(richness_performance$liter), function_corr)
+
+corr_final <- plot_grid(corr_plots[[1]], corr_plots[[2]],corr_plots[[3]],corr_plots[[4]],corr_plots[[5]],corr_plots[[6]],corr_plots[[7]],corr_plots[[8]],corr_plots[[9]])
+corr_final
+ggsave("richness_corr.svg", width = 9, height = 6)
+```
+
+# session info
+```{r}
+sessionInfo()
+```
+

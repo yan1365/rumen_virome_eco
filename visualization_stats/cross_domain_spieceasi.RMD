@@ -1,0 +1,161 @@
+---
+title: "cross_domain_SpiecEasi"
+author: "Ming Yan"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_download: true
+---
+
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# Load libraries
+```{r}
+library(tidyverse)
+library(SpiecEasi)
+library(igraph)
+library(stringr)
+library(RColorBrewer)
+```
+
+
+```{r}
+virome = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/virome_prevalence_filtered_70.csv")
+microbe = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/microbes_prevalence_filtered_70.csv")
+rvd_host = read_tsv("/fs/ess/PAS0439/MING/virome/checkv_trimmed_for_dowmstream/RVD_resources/host_match.tsv")
+microbe_taxa = read_csv("/fs/ess/PAS0439/MING/databases/hungate_rug_rumen_mags_taxa.csv")
+core_genus_df = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/core_genus_abundant.csv")
+core_species_df = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/core_species_taxa.csv")
+
+```
+
+
+```{r}
+# color nodes based on phylum
+find_phylum <- function(x) {
+   Phylum = microbe_taxa %>%  filter(Species == x) %>% select(Phylum) %>% unique() %>% unlist()
+   
+   if(length(Phylum) == 0 ){
+     return("NA")
+   }
+   else if(Phylum == "Methanobacteriota"){
+      return("Archaea")
+   }else{
+     return(Phylum)
+   }
+   
+}
+
+find_host_phylum <- function(x) {
+   Phylum = rvd_host %>%  filter(sseqid == x) %>% select(phylum) %>% unique() %>% unlist()
+   
+   if(length(Phylum) == 0 ){
+     return("NA")
+   }
+   else if(str_split(Phylum, "__")[[1]][2] == "Methanobacteriota"){
+      return("Archaea")
+   } else{
+     return(str_split(Phylum, "__")[[1]][2])
+   }
+   
+}
+
+
+microbe_phylum <-  sapply(colnames(microbe)[2:ncol(microbe)], find_phylum) 
+rvd_host_phylum <- sapply(colnames(virome)[2:ncol(virome)], find_host_phylum)  
+
+phylum = c(rvd_host_phylum, microbe_phylum)
+
+
+
+mycolors = c(brewer.pal(name="Set1", n = 5)[3:5], brewer.pal(name="Paired", n = 7), brewer.pal(name="Set3", n = 3)) # generate large number of colors
+names(mycolors) = unique(phylum)
+phylum_color = phylum
+for (f in 1:length(mycolors)){
+   phy = names(mycolors)[f]
+   col = mycolors[f]
+   phylum_color = sapply(phylum_color, function(x){
+      gsub(phy, col, x)
+   })
+   }
+
+# scales::show_col(col, cex_label = 0.7, ncol = 2) # display hexcolor sequences
+```
+
+# increase node size for core species
+```{r}
+core_species = intersect(core_species_df$Species, colnames(microbe))
+
+microbe_node_size = c()
+for (f in colnames(microbe)[2:ncol(microbe)]){
+   if (f %in% core_species){
+      microbe_node_size = c(microbe_node_size,5)
+   }else {
+      microbe_node_size = c(microbe_node_size,3)
+   }
+}
+
+virome_node_size = c()
+for (f in colnames(virome)[2:ncol(virome)]){
+   if (f %in% core_species){
+      virome_node_size = c(virome_node_size,5)
+   }else {
+      virome_node_size = c(virome_node_size,3)
+   }
+}
+
+vertex_size_v = c(virome_node_size, microbe_node_size)
+
+```
+
+
+
+```{r}
+#se.rvd <- spiec.easi(list(as.matrix(virome[,2:ncol(virome)]), as.matrix(microbe[,2:ncol(microbe)])), method='mb', nlambda=100, 
+              #lambda.min.ratio=1e-3, pulsar.params = list(thresh = 0.01, ncores=4, rep.num=50))
+
+se.rvd = readRDS("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/se.rvd.rds")
+igraph.rvd = adj2igraph(getRefit(se.rvd))
+
+Type = c(rep("Virus", ncol(virome) - 1), rep("Microbe", ncol(microbe) - 1))
+
+V(igraph.rvd)$Type = Type
+V(igraph.rvd)$phylum_color = phylum_color
+
+
+E(igraph.rvd)[1:198 %--% 1:198 ]$type = "vtov"
+E(igraph.rvd)[199:484 %--% 199:484 ]$type = "mtom"
+E(igraph.rvd)[1:198 %--% 199:484 ]$type = "vtom"
+
+edge_color = c()
+for (f in E(igraph.rvd)$type){
+   if (f == "vtov"){
+      edge_color = c(edge_color, "green")
+   } else if (f == "vtom"){
+      edge_color = c(edge_color, "red")
+   } else {
+     edge_color = c(edge_color, "blue") 
+   }
+}
+
+E(igraph.rvd)$color = edge_color
+
+set.seed(1)
+svg(filename="/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/cross_domain_network.svg", width = 5, height = 5)
+par(mar = c(0.1, 0.1, 0.1, 0.1)) 
+plot(igraph.rvd, vertex.size=vertex_size_v, vertex.label = NA, 
+     vertex.shape=ifelse(V(igraph.rvd)$Type == "Virus", "square", "circle"),
+     vertex.color=phylum_color
+     )
+dev.off()
+```
+
+
+

@@ -1,0 +1,43 @@
+---
+title: "kraken_benchmark"
+author: "Ming Yan"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# Load libraries
+```{r}
+library(tidyverse)
+library(ggpubr)
+```
+
+# Load data
+```{r}
+mapping <- read_csv("/fs/scratch/PAS0439/Ming/virome_ecology_core_prkaryotes/scripts/02_kraken2_mapping/slurm_out/kraken_benchmark.csv")
+
+```
+
+# plot 
+```{r}
+mapping$pair <- ""
+for (f in unique(mapping$index)){
+  print(f)
+  mapping[mapping$index == f, "pair"] <- f
+}
+
+mapping$variable <- factor(mapping$variable, levels = c("standard", "gtdb", "gtdb+3588", "gtdb+7166"))
+mapping %>% ggplot(aes(x = variable, y = value)) + geom_boxplot(aes(x = variable, y = value)) +
+  geom_line(aes(x = variable, y = value, group=pair), alpha = 0.2) + 
+  labs(x = "Kraken classifier", y = "Classification rate") + theme_minimal()
+
+ggsave("kraken_benchmark.svg", width = 4.5, height = 3, units = "in")
+```

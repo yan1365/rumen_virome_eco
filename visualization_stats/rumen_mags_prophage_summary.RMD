@@ -1,0 +1,106 @@
+---
+title: "rumen mags prophage summary"
+author: "Ming Yan"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_download: true
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# load library
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(RColorBrewer)
+library(ggrepel)
+library(grImport2)
+library(gggenes)
+```
+
+# include data
+```{r}
+prophage_prevalence <- read_csv("prophage_prevalence.csv")
+prophage_taxa <- read_csv("prophage_taxa_df.csv")
+```
+
+# prophage per MAG 
+```{r}
+library(scales) # to access break formatting functions, see http://www.sthda.com/english/wiki/ggplot2-axis-scales-and-transformations
+
+integer_breaks <- function(n = 5, ...) {
+  fxn <- function(x) {
+    breaks <- floor(pretty(x, n, ...))
+    names(breaks) <- attr(breaks, "labels")
+    breaks
+  }
+  return(fxn)
+}
+
+prophage_prevalence$prevelance <- prophage_prevalence$prevelance + 0.1 # to display 1 genome have 10 prophage
+prophage_prevelance_fig <- prophage_prevalence %>% ggplot() + geom_bar(aes(x = prophage_per_genome, y = prevelance), stat = "identity") +
+     scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+  scale_x_continuous(breaks = integer_breaks()) +
+  theme_minimal() + 
+  labs(x = "Prophages per genome", y = "Number of genome") + 
+  theme(
+    axis.title.x = element_text(size = 10),
+    axis.title.y = element_text(size = 10)
+  )
+
+prophage_prevelance_fig
+ggsave("prophage_prevelance_fig.svg", width = 2, height = 1.8, units = "in")
+```
+
+# prophage taxa
+```{r}
+others_n <- prophage_taxa %>% filter(prediction %in%  c("Ackermannviridae", "Autographiviridae", "Herelleviridae")) %>% select(n) %>% sum()
+
+tmp <- data.frame(prediction = "Ackermannviridae/Autographiviridae/Herelleviridae", n = others_n) 
+
+prophage_taxa_df <- rbind(prophage_taxa, tmp) %>% filter(!prediction %in% c("Ackermannviridae", "Autographiviridae", "Herelleviridae"))
+
+lable <- c()
+
+for (f in 1: nrow(prophage_taxa_df)){
+  lable[f] = paste(prophage_taxa_df$prediction[f], " (", prophage_taxa_df$n[f], ")", sep = "")
+}
+
+prophage_taxa_df$prediction <- factor(prophage_taxa_df$prediction, levels = c("Myoviridae", "Siphoviridae", "Podoviridae", "Unassigned", "Ackermannviridae/Autographiviridae/Herelleviridae"))
+
+prophage_taxa_df$lable <- lable
+
+myPalette <- brewer.pal(5, "Set1") 
+
+pie(prophage_taxa_df$n , labels = prophage_taxa_df$lable, border="white", col=myPalette)
+
+svg("prophage_taxa_pie.svg", width = 9, height = 3, pointsize = 10)
+pie(prophage_taxa_df$n , labels = prophage_taxa_df$lable, border="white", col=myPalette)
+dev.off() 
+```
+
+# example arg-coding prophage
+```{r}
+arg_df <- read_tsv("../04_prophage_rumen_mags/arg_coding_example_prophage.tsv")
+arg_df$fasta <- "" #"Agathobacter sp900546625 prophage"
+
+orf_pallete <- c(ARG="#19fa82", Others = "#bcbdc2", "Prophage hallmark" = "#f619fa", "Viral functional gene" = "#fa8619", "Viral structural gene" = "#1924fa" )
+
+arg_contig <- ggplot(arg_df, aes(xmin = start_position, xmax = end_position, y = fasta, fill = orf)) +
+  geom_gene_arrow()  +
+   scale_fill_manual(values=orf_pallete) +
+  labs(y="", x="") +
+  theme_genes() + 
+  theme(legend.title= element_blank()) 
+
+arg_contig
+#ggsave("arg_contig.svg", width = 8, height = 2)
+```
