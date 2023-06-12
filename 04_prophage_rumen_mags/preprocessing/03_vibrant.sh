@@ -16,7 +16,7 @@ source activate vibrant-1.2.1
 
 cd /fs/scratch/PAS0439/Ming/virome_ecology_core_prkaryotes/results/04_prophage_rumen_mags
 
-VIBRANT_run.py -no_plot  -virome -t 20 -i prophage_rumen_mags_vs2_keep1_2.fa -folder ./vibrant_out 
+VIBRANT_run.py -no_plot  -virome -t 20 -i prophage_rug_hungate_vs2_keep1_2.fa -folder ./vibrant_out 
 
 DURATION=$(( SECONDS - START ))
 

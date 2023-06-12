@@ -2,7 +2,7 @@
 #SBATCH --job-name=checkv_%j
 #SBATCH --output=checkv_%j.out
 # Walltime Limit: hh:mm:ss 
-#SBATCH --time=04:30:00
+#SBATCH --time=1:30:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=10
 #SBATCH --mail-type=ALL
@@ -12,7 +12,7 @@ cd /fs/scratch/PAS0439/Ming/virome_ecology_core_prkaryotes/scripts/04_prophage_r
 
 START=$SECONDS
 id=${1}
-dataset=prophage_checkv_${id}.txt
+dataset=rug4941_rumen_mags_${id}.txt
 echo "processing ${dataset}"
 
 module load python/3.6-conda5.2
