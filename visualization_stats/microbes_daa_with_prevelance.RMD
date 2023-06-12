@@ -21,18 +21,19 @@ library(tidyverse)
 library(gtools) 
 library(phyloseq)
 library(data.table)
+library(ggpubr)
 ```
 
 
 # load data
 ```{r}
 # metadata
-metadata <- read.csv("metadata_animal_performance.csv")
+metadata <- read.csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/metadata_animal_performance.csv")
 
 # microbiome daa
-linda_species_out <- read.csv("linda_species_out.csv")
+linda_species_out <- read.csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/linda_species_out.csv")
 
-prevelance <- read.csv("microbe_species_prevelance_df.csv")
+prevelance <- read.csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/microbe_species_prevelance_df.csv")
 
 ```
 
@@ -57,20 +58,47 @@ core_common <- function(x){
   }
 }
 
-plot_ready <- linda_species_out_prevelance_full %>% mutate(prevelance = sapply(prevelance, core_common))
+plot_ready <- linda_species_out_prevelance_full %>% mutate(prevelance = sapply(prevelance, core_common)) %>% filter(padj < 0.1)
 
-plot_final <- plot_ready  %>% filter(padj < 0.1) %>% ggplot() + geom_point(aes(x = log2FoldChange, y = log10(padj), color = prevelance)) + 
-  facet_wrap(vars(liter, trait), scales = "free", labeller = function (labels) {   # reduce space between the facet legend 
+
+place_holder <- linda_species_out_prevelance_full %>% filter(!liter %in% unique(plot_ready$liter)) %>% group_by(project) %>% slice_min(padj) %>% unique() %>% ungroup()
+
+place_holder <- place_holder %>% mutate(prevelance = sapply(prevelance, core_common))
+
+plot_final <- rbind(plot_ready, place_holder)
+
+
+plot_final[plot_final$project == "PRJEB23561","trait"] <- "Dietary composition (cattle)"
+plot_final[plot_final$project == "PRJNA492173","trait"] <- "Dietary composition (goat)"
+
+
+diet_study <- c("PRJEB21624", "PRJNA492173", "PRJEB23561")
+
+plot_diet <- plot_final %>% filter(project %in% diet_study) %>% ggplot() + geom_point(aes(x = log2FoldChange, y = log10(padj), color = prevelance), size = 1) + 
+  facet_wrap(vars(trait), scales = "free", labeller = function (labels) {   # reduce space between the facet legend 
+               labels <- lapply(labels, as.character)           
+               list(do.call(paste, c(labels, list(sep = "\n"))))
+             })  +  scale_y_reverse() + geom_hline(yintercept=-1.3, linetype="dashed", 
+                color = "red", size=1) + labs(y = "log10(q)") + 
+  scale_color_discrete(name = "Prevelance") + theme_minimal() +
+  theme(legend.position = "none") +
+  labs(x = "")
+
+plot_phenotype <- plot_final %>% filter(!project %in% diet_study) %>% ggplot() + geom_point(aes(x = log2FoldChange, y = log10(padj), color = prevelance), size = 1) + 
+  facet_wrap(vars(trait), scales = "free", labeller = function (labels) {   # reduce space between the facet legend 
                labels <- lapply(labels, as.character)           
                list(do.call(paste, c(labels, list(sep = "\n"))))
              })  +  scale_y_reverse() + geom_hline(yintercept=-1.3, linetype="dashed", 
                 color = "red", size=1) + labs(y = "log10(q)") + 
   scale_color_discrete(name = "Prevelance") + theme_minimal() +
   theme(legend.position = "bottom") 
-  
-plot_final
-ggsave("daa_volcano.svg", width = 9, height = 6)
+
+plot_daa <- ggarrange(plot_diet, plot_phenotype, nrow = 2, heights = c(1, 2))
+
+plot_daa
+ggsave("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/daa_volcano.png", width = 9, height = 6, dpi = 700)
 ```
+
 # session info
 ```{r}
 sessionInfo()
