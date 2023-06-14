@@ -51,7 +51,7 @@ stat.performance <- stat.performance %>% filter(!(group1 == "HLS" & group2 == "G
 ```{r}
 diet_study <- c("PRJEB21624", "PRJNA492173", "PRJEB23561")
 
-species_color <- c("#e03f34", "#24b1ed", "#fa7107", "#24ed67")
+species_color <- c("#e03f34", "#24b1ed", "#e13bed", "#24ed67")
 names(species_color) <- c("Beef", "Dairy", "Sheep", "Goat")
 
 p <- micro_ready_performance %>% ggplot() + 

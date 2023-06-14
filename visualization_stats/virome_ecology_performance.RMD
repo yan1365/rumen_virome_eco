@@ -93,9 +93,25 @@ stat.performance %>% filter(!(group1 == "HLS" & group2 == "Grazing")) %>%
 
 ### Comparing richness among different animal performance traits. 
 ```{r}
-richness_box <- richness_ready_performance %>% ggplot() + 
+diet_study <- c("PRJEB21624", "PRJNA492173", "PRJEB23561")
+
+species_color <- c("#e03f34", "#24b1ed", "#fa7107", "#24ed67")
+names(species_color) <- c("Beef", "Dairy", "Sheep", "Goat")
+
+p <- richness_ready_performance %>% ggplot() + 
+  aes(x=treatment, y= richness_normalized) + geom_boxplot(aes(color = animal))+
+    theme(legend.position = "bottom") + labs(color = "Species") + 
+  scale_color_manual(name = "Species", values = species_color)
+
+
+richness_legend <- get_legend(p)
+
+richness_ready_performance[richness_ready_performance$study == "PRJEB23561","trait"] <- "Dietary composition (cattle)"
+richness_ready_performance[richness_ready_performance$study == "PRJNA492173","trait"] <- "Dietary composition (goat)"
+
+ richness_box_diet <- richness_ready_performance %>% filter(study %in% diet_study) %>% ggplot() + 
   aes(x=treatment, y= richness_normalized) + geom_boxplot(aes(color = animal)) +
-  facet_wrap(vars(trait, liter), scales = "free", labeller = function (labels) {   # reduce space between the facet legend 
+  facet_wrap(vars(trait), scales = "free", labeller = function (labels) {   # reduce space between the facet legend 
                labels <- lapply(labels, as.character)           
                list(do.call(paste, c(labels, list(sep = "\n"))))
              }) + 
@@ -103,28 +119,53 @@ richness_box <- richness_ready_performance %>% ggplot() +
   geom_jitter(size = 1, width = 0.2, height = 0.2, aes(color = animal)) + 
   scale_y_continuous(expand = expansion(mult = c(0, 0.15)))  + 
   theme_minimal()+
-    theme(legend.position = "bottom")
+    theme(legend.position = "none") + 
+  scale_color_manual(name = "animal", values = species_color) #+
+  #labs(tag = "A") + 
+  #theme(plot.tag.position = c(0, 0.97)) +
+  #theme(plot.tag = element_text(face = "bold", size = 12))
+
+
+
+richness_box_phenotype <- richness_ready_performance %>% filter(!study %in% diet_study) %>% ggplot() + 
+  aes(x=treatment, y= richness_normalized) + geom_boxplot(aes(color = animal)) +
+  facet_wrap(vars(trait), scales = "free", labeller = function (labels) {   # reduce space between the facet legend 
+               labels <- lapply(labels, as.character)           
+               list(do.call(paste, c(labels, list(sep = "\n"))))
+             }) + 
+  labs(x = "", y = "Richness per billion bp") +  labs(color = "Species") +
+  geom_jitter(size = 1, width = 0.2, height = 0.2, aes(color = animal)) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))  + 
+  theme_minimal()+
+    theme(legend.position = "none") + 
+  scale_color_manual(name = "animal", values = species_color) #+ 
+  #labs(tag = "B") + 
+  #theme(plot.tag.position = c(0, 0.97)) +
+  #theme(plot.tag = element_text(face = "bold", size = 12))
 
 
 ## add annotations when significant
-virome_richness <- richness_box +
-   geom_curve(data=tibble(liter="Stewart et al., 2018", trait = "Concentrate level"), aes(x=1, xend=2, y=175, yend=175), curvature = -0.1, color = "#FF0000") +
-  geom_text(data=tibble(liter="Stewart et al., 2018", trait = "Concentrate level"), aes(x=1.5, y=190, label = "**" ), color = "#FF0000", size=5) + 
-  geom_curve(data=tibble(liter="Lu et al., 2019", trait = "Dietary composition"), aes(x=1, xend=3, y=125, yend=125), curvature = -0.1, color = "#FF0000") +
-  geom_text(data=tibble(liter="Lu et al., 2019", trait = "Dietary composition"), aes(x=2, y=135, label = "***" ), color = "#FF0000", size=5) + 
-  geom_curve(data=tibble(liter="Lu et al., 2019", trait = "Dietary composition"), aes(x=2, xend=3, y=105, yend=105), curvature = -0.1, color = "#FF0000") +
-  geom_text(data=tibble(liter="Lu et al., 2019", trait = "Dietary composition"), aes(x=2.5, y=110, label = "*" ), color = "#FF0000", size=5) + 
-  geom_curve(data=tibble(liter="Shi et al., 2014", trait = "Methane emission"), aes(x=1, xend=2, y=102, yend=102), curvature = -0.1, color = "#FF0000") +
-  geom_text(data=tibble(liter="Shi et al., 2014", trait = "Methane emission"), aes(x=1.5, y=107, label = "***" ), color = "#FF0000", size=5) +
-  geom_curve(data=tibble(liter="Li et al., 2020", trait = "Dietary composition"), aes(x=1, xend=2, y=135, yend=135), curvature = -0.1, color = "#FF0000") +
-  geom_text(data=tibble(liter="Li et al., 2020", trait = "Dietary composition"), aes(x=1.5, y=145, label = "***" ), color = "#FF0000", size=5) +
-  geom_curve(data=tibble(liter="Li et al., 2020", trait = "Dietary composition"), aes(x=3, xend=4, y=45, yend=45), curvature = -0.1, color = "#FF0000") +
-  geom_text(data=tibble(liter="Li et al., 2020", trait = "Dietary composition"), aes(x=3.5, y=55, label = "***" ), color = "#FF0000", size=5) +
-  geom_curve(data=tibble(liter="Anderson et al., 2021", trait = "Average daily gain"), aes(x=1, xend=2, y=145, yend=145), curvature = -0.1, color = "#FF0000") +
-  geom_text(data=tibble(liter="Anderson et al., 2021", trait = "Average daily gain"), aes(x=1.5, y=155, label = "*" ), color = "#FF0000", size=5)  
-            
+virome_richness_diet <- richness_box_diet +
+   geom_curve(data=tibble(trait = "Concentrate level"), aes(x=1, xend=2, y=175, yend=175), curvature = -0.1) +
+  geom_text(data=tibble(trait = "Concentrate level"), aes(x=1.5, y=190, label = "**" ), size=5) + 
+  geom_curve(data=tibble(trait = "Dietary composition (goat)"), aes(x=1, xend=3, y=125, yend=125), curvature = -0.1) +
+  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=2, y=135, label = "***" ), size=5) + 
+  geom_curve(data=tibble(trait = "Dietary composition (goat)"), aes(x=2, xend=3, y=105, yend=105), curvature = -0.1) +
+  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=2.5, y=110, label = "*" ), size=5) +
+  geom_curve(data=tibble(trait = "Dietary composition (cattle)"), aes(x=1, xend=2, y=135, yend=135), curvature = -0.1) +
+  geom_text(data=tibble(trait = "Dietary composition (cattle)"), aes(x=1.5, y=145, label = "***" ), size=5) +
+  geom_curve(data=tibble(trait = "Dietary composition (cattle)"), aes(x=3, xend=4, y=45, yend=45), curvature = -0.1) +
+  geom_text(data=tibble(trait = "Dietary composition (cattle)"), aes(x=3.5, y=55, label = "***" ), size=5) 
+          
+virome_richness_phenotype <- richness_box_phenotype +
+  geom_curve(data=tibble(trait = "Methane emission"), aes(x=1, xend=2, y=102, yend=102), curvature = -0.1) +
+  geom_text(data=tibble(trait = "Methane emission"), aes(x=1.5, y=107, label = "***" ), size=5) +
+  geom_curve(data=tibble(trait = "Average daily gain"), aes(x=1, xend=2, y=145, yend=145), curvature = -0.1) +
+  geom_text(data=tibble(trait = "Average daily gain"), aes(x=1.5, y=155, label = "*" ), size=5)    
+
+virome_richness <- ggarrange(virome_richness_diet, virome_richness_phenotype, richness_legend, nrow = 3, heights = c(1,2, 0.2))
 virome_richness
-ggsave("virome_richness.svg", width = 9, height = 6)
+ggsave("virome_richness.svg", width = 8, height = 5)
 ```
 
 ### beta-diversity per study based
@@ -230,7 +271,14 @@ adonis_df %>% select(c(pairs, p.adjusted, animal, trait, liter)) %>% print() %>%
 ### plot pcoa
 ### extract lagend and plot it individually
 ```{r}
-function_pcoa <- function(literature){ PCOA_df %>% filter(liter == literature) %>% ggplot(aes(x=Axis.1, y=Axis.2, color=treatment)) + geom_point() + facet_wrap(vars(trait, liter), labeller = function (labels) {   # reduce space between the facet legend 
+PCOA_df[PCOA_df$study == "PRJEB23561","trait"] <- "Dietary composition (cattle)"
+PCOA_df[PCOA_df$study == "PRJNA492173","trait"] <- "Dietary composition (goat)"
+PCOA_df[PCOA_df$study == "PRJNA597489","trait"] <- "Feed efficiency (milk)"
+PCOA_df[PCOA_df$study == "PRJNA448333","trait"] <- "Feed efficiency (meat)"
+
+PCOA_df <- left_join(PCOA_df %>% select(-treatment), metadata_animal_performance[, c("id", "treatment")], by = "id")
+
+function_pcoa <- function(literature){ PCOA_df %>% filter(liter == literature) %>% ggplot(aes(x=Axis.1, y=Axis.2, color=treatment)) + geom_point() + facet_wrap(vars(trait), labeller = function (labels) {   # reduce space between the facet legend 
                labels <- lapply(labels, as.character)           # https://stackoverflow.com/questions/41311810/how-to-reduce-vertical-spacing-between-facet-labels-when-using-facet-wrap
                list(do.call(paste, c(labels, list(sep = "\n"))))
              }) +
@@ -256,54 +304,27 @@ pcoa_plots <- lapply(unique(PCOA_df$liter), function_pcoa)
 names(pcoa_plots) <- unique(PCOA_df$liter)
 
 pcoa_plots[["Shi et al., 2014"]] <- pcoa_plots[["Shi et al., 2014"]] + annotate("text", -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 3)  # hjust and vjust are defined between 0 and 1, min to max
-pcoa_plots[["Li et al., 2019"]] <- pcoa_plots[["Li et al., 2019"]] + annotate("text", -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: *", size = 3)
+pcoa_plots[["Li et al., 2019"]] <- pcoa_plots[["Li et al., 2019"]] + annotate("text", -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 3)
 pcoa_plots[["Li et al., 2020"]] <- pcoa_plots[["Li et al., 2020"]] + annotate("text", -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 3) 
 pcoa_plots[["Stewart et al., 2018"]] <- pcoa_plots[["Stewart et al., 2018"]] + annotate("text",  -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 3) 
 pcoa_plots[["Xue et al., 2020"]] <- pcoa_plots[["Xue et al., 2020"]] + annotate("text",  -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: *", size = 3) 
 pcoa_plots[["Lu et al., 2019"]] <- pcoa_plots[["Lu et al., 2019"]] + annotate("text",  -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 3) 
  
-pcoa_final <- plot_grid(pcoa_plots[[1]], pcoa_plots[[2]],pcoa_plots[[3]],pcoa_plots[[4]],pcoa_plots[[5]],pcoa_plots[[6]],pcoa_plots[[7]],pcoa_plots[[8]],pcoa_plots[[9]])
+#pcoa_final <- plot_grid(pcoa_plots[[1]], pcoa_plots[[2]],pcoa_plots[[3]],pcoa_plots[[4]],pcoa_plots[[5]],pcoa_plots[[6]],pcoa_plots[[7]],pcoa_plots[[8]],pcoa_plots[[9]])
 
+pcoa_diet <- ggarrange(pcoa_plots$`Stewart et al., 2018`, pcoa_plots$`Li et al., 2020`, pcoa_plots$`Lu et al., 2019`, nrow = 1) #+ labs(tag = "A") + 
+  #theme(plot.tag.position = c(0, 0.97))
+
+pcoa_phenotype <- ggarrange(pcoa_plots$`Anderson et al., 2021`, pcoa_plots$`Shi et al., 2014`, pcoa_plots$`Xue et al., 2020`, pcoa_plots$`Stergiadis et al., 2021`, pcoa_plots$`Li et al., 2019`, pcoa_plots$`Xue et al., 2022`) #+ labs(tag = "B") + 
+ # theme(plot.tag.position = c(0, 0.97))
+
+## adjust tag position, https://stackoverflow.com/questions/54207695/put-tag-without-losing-space-for-actual-chart 
+
+pcoa_final <- ggarrange(pcoa_diet, pcoa_phenotype, nrow = 2, heights = c(1, 2))
 pcoa_final
-ggsave("virome_pcoa.svg", width = 9, height = 6)
+ggsave("virome_pcoa.svg", width = 8, height = 5)
 ```
 
-
-# The other way around
-```{r}
-# http://stackoverflow.com/questions/12539348/ggplot-separate-legend-and-plot
-# use this trick to get the legend as a grob object
-
-#g_legend<-function(a.gplot){
-#    tmp <- ggplot_gtable(ggplot_build(a.gplot))
-#    leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
-#    legend <- tmp$grobs[[leg]]
-#    legend
-#}
-
-
-#plot_legend_li2020 <- PCOA_df %>% filter(liter == "Li et al., 2020") %>% ggplot(aes(x=Axis.1, y=Axis.2, color=treatment)) + geom_point() + labs(color = "Li et al., 2020") + theme(legend.title = element_text(size = 9)) 
-
-#plot_legend_Stergiadis <- PCOA_df %>% filter(liter == "Stergiadis et al., 2021") %>% ggplot(aes(x=Axis.1, y=Axis.2, color=treatment)) + geom_point() + labs(color = "Stergiadis et al., 2021") + theme(legend.title = element_text(size = 9)) 
-
-#plot_legend_lu <- PCOA_df %>% filter(liter == "Lu et al., 2019") %>% ggplot(aes(x=Axis.1, y=Axis.2, color=treatment)) + geom_point() + labs(color = "Lu et al., 2019") + theme(legend.title = element_text(size = 9)) 
-
-#plot_legend_highorlow <- PCOA_df %>% filter(liter == "Shi et al., 2014") %>% ggplot(aes(x=Axis.1, y=Axis.2, color=treatment)) + geom_point() + labs(color = "Others") + theme(legend.title = element_text(size = 9))
-
-#legend_li2020 <- g_legend(plot_legend_li2020) 
-
-#legend_Stergiadis <- g_legend(plot_legend_Stergiadis)
-
-#legend_lu <- g_legend(plot_legend_lu)
-
-#legend_highorlow <- g_legend(plot_legend_highorlow) 
-
-#legend_ready <- plot_grid(legend_li2020, legend_Stergiadis, legend_lu, legend_highorlow, ncol = 1, align = "v")
-
-#grid.arrange(pcoa_final, legend_ready , ncol = 2, widths = c(4/5,1/5))
-
-
-```
 
 # session info
 ```{r}
