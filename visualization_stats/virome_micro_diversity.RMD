@@ -57,7 +57,8 @@ names(species_color) <- c("Beef", "Dairy", "Sheep", "Goat")
 p <- micro_ready_performance %>% ggplot() + 
   aes(x=treatment, y= average_micro_diversity) + geom_boxplot(aes(color = animal))+
     theme(legend.position = "bottom") + labs(color = "Species") + 
-  scale_color_manual(name = "Species", values = species_color)
+  scale_color_manual(name = "Species", values = species_color)+
+  theme(text = element_text(size=8))   
 
 micro_legend <- get_legend(p)
 
@@ -70,8 +71,8 @@ micro_box_diet <- micro_ready_performance %>% filter(study %in% diet_study) %>% 
                labels <- lapply(labels, as.character)           
                list(do.call(paste, c(labels, list(sep = "\n"))))
              }) + 
-  labs(x = "", y = expression("Microdiversity ("*pi*")")) +  labs(color = "Species") +
-  geom_jitter(size = 1, width = 0.2,  aes(color = animal)) +
+  labs(x = "", y = expression("Micro-diversity ("*pi*")")) +  labs(color = "Species") +
+  geom_jitter(size = 0.8, width = 0.2,  aes(color = animal)) +
   theme_minimal()+
     theme(legend.position = "none") + 
   scale_color_manual(name = "animal", values = species_color)
@@ -87,8 +88,8 @@ micro_box_phenotype <- micro_ready_performance %>% filter(!study %in% diet_study
                labels <- lapply(labels, as.character)           
                list(do.call(paste, c(labels, list(sep = "\n"))))
              }) + 
-  labs(x = "", y = expression("Microdiversity ("*pi*")")) +  labs(color = "Species") +
-  geom_jitter(size = 1, width = 0.2, aes(color = animal)) + 
+  labs(x = "", y = expression("Micro-diversity ("*pi*")")) +  labs(color = "Species") +
+  geom_jitter(size = 0.8, width = 0.2, aes(color = animal)) + 
   scale_y_continuous(expand = expansion(mult = c(0, 0.15)))  + 
   theme_minimal()+
     theme(legend.position = "none") + 
@@ -104,17 +105,19 @@ micro_box_phenotype
 ## add annotations when significant
 micro_box_diet_anno <- micro_box_diet +
    geom_curve(data=tibble(trait = "Concentrate level"), aes(x=1, xend=2, y=0.013, yend=0.013), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Concentrate level"), aes(x=1.5, y=0.0135, label = "***" ), size=4) + 
+  geom_text(data=tibble(trait = "Concentrate level"), aes(x=1.5, y=0.0135, label = "***" ), size=3) + 
   geom_curve(data=tibble(trait = "Dietary composition (goat)"), aes(x=1, xend=3, y=0.0063, yend=0.0063), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=2, y=0.0065, label = "***" ), size=4) + 
+  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=2, y=0.0065, label = "***" ), size=3) + 
   geom_curve(data=tibble(trait = "Dietary composition (goat)"), aes(x=2, xend=3, y=0.005, yend=0.005), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=2.5, y=0.00515, label = "**" ), size=4) +
+  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=2.5, y=0.00515, label = "**" ), size=3) +
    geom_curve(data=tibble(trait = "Dietary composition (goat)"), aes(x=1, xend=2, y=0.006, yend=0.006), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=1.5, y=0.00615, label = "***" ), size=4) +
+  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=1.5, y=0.00615, label = "***" ), size=3) +
   geom_curve(data=tibble(trait = "Dietary composition (cattle)"), aes(x=3, xend=4, y=0.0075, yend=0.0075), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Dietary composition (cattle)"), aes(x=3.5, y=0.0078, label = "*" ), size=4) 
+  geom_text(data=tibble(trait = "Dietary composition (cattle)"), aes(x=3.5, y=0.0078, label = "*" ), size=3) +
+  theme(text = element_text(size=8)) +
+  theme(plot.margin=grid::unit(c(0,0,0,0), "mm"))
 
-svg("/fs/ess/PAS0439/MING/virome_ecology/results/inStrain_RVD/virome_micro_diet.svg", width = 8, height = 2.2)
+svg("/fs/ess/PAS0439/MING/virome_ecology/results/inStrain_RVD/virome_micro_diet.svg", width = 5, height = 1.6)
 micro_box_diet_anno 
 dev.off()
 
@@ -123,17 +126,19 @@ dev.off()
 ```{r}
 micro_box_phenotype_anno <- micro_box_phenotype +
   geom_curve(data=tibble(trait = "Methane emission"), aes(x=1, xend=2, y=0.0082, yend=0.0082), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Methane emission"), aes(x=1.5, y=0.00835, label = "*" ), size=4) +
+  geom_text(data=tibble(trait = "Methane emission"), aes(x=1.5, y=0.00835, label = "*" ), size=3) +
   geom_curve(data=tibble(trait = "Milk protein yield"), aes(x=1, xend=2, y=0.0215, yend=0.0215), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Milk protein yield"), aes(x=1.5, y=0.0225, label = "**" ), size=4)    
+  geom_text(data=tibble(trait = "Milk protein yield"), aes(x=1.5, y=0.0225, label = "**" ), size=3) +
+  theme(text = element_text(size=8))  +
+  theme(plot.margin=grid::unit(c(0,0,0,0), "mm")) 
 
-svg("/fs/ess/PAS0439/MING/virome_ecology/results/inStrain_RVD/virome_micro_pheno.svg", width = 8, height = 3)
+svg("/fs/ess/PAS0439/MING/virome_ecology/results/inStrain_RVD/virome_micro_pheno.svg", width = 5, height = 2.5)
 micro_box_phenotype_anno
 dev.off()
 ```
 
 ```{r}
 ggarrange(micro_legend, nrow = 1, heights = 1)
-ggsave("/fs/ess/PAS0439/MING/virome_ecology/results/inStrain_RVD/virome_micro_legend.svg", width = 8, height = 1)
+ggsave("/fs/ess/PAS0439/MING/virome_ecology/results/inStrain_RVD/virome_micro_legend.svg", width = 5, height = 1)
 ```
 ```

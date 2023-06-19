@@ -27,14 +27,14 @@ library(data.table)
 # load data
 ```{r}
 # metadata
-metadata <- read.csv("metadata_animal_performance.csv")
+metadata <- read.csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/metadata_animal_performance.csv")
 host_infor <- read_tsv("/fs/ess/PAS0439/MING/virome/checkv_trimmed_for_dowmstream/host_prediction/output/results/host_match.tsv")
 
 # microbiome daa
-linda_species_out <- read.csv("linda_species_out.csv")
+linda_species_out <- read.csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/linda_species_out.csv")
 
 
-linda_virome <- read.csv("linda_virome_out.csv")
+linda_virome <- read.csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/linda_virome_out.csv")
 linda_virome_host_info <- left_join(linda_virome, host_infor, by = c("rowname" = "sseqid")) 
 linda_virome_host_info[c("domain", "phylum", "class", "order", "family", "genus", "species")] <- linda_virome_host_info %>% select(c(domain, phylum, class, order, family, genus, species)) %>% lapply(function(x) str_replace(x,'[a-z]__', '')) 
 # remove duplicated host prediction res (same taxa different genome)
@@ -114,8 +114,14 @@ daa_virome_host_combined[daa_virome_host_combined$project  == "PRJEB21624", "tre
 daa_virome_host_combined[daa_virome_host_combined$project  == "PRJEB23561", "treatment"] <- "Grazing vs. TMR"
 daa_virome_host_combined[daa_virome_host_combined$project  == "PRJNA448333", "treatment"] <- "High vs. Low"
 # plot, filter PRJEB33080 because milk SFA not an interested trait
-daa_virome_host_combined_plot <- daa_virome_host_combined %>% filter(project != "PRJEB33080") %>% ggplot() + geom_point(aes(y = rowname, x = log2FoldChange, color = factor(type))) + geom_segment(aes(y = rowname, yend = rowname, x=lowerlimit , xend=upperlimit, color = type)) + geom_vline(xintercept = 0, linetype = "dashed", color = "red") + theme(legend.position = "bottom") + facet_wrap(vars(trait,  treatment), nrow = 1, scales = "free_x" ) + theme(legend.title=element_blank()) + labs(y = "") +
-  theme(axis.text.x = element_text(size=8))
+daa_virome_host_combined_plot <- daa_virome_host_combined %>% 
+  mutate(trait = if_else(trait == "Feed efficiency (meat)", "Feed efficiency\n(meat)", trait)) %>% 
+  filter(project != "PRJEB33080") %>% ggplot() + geom_point(aes(y = rowname, x = log2FoldChange, color = factor(type))) + geom_segment(aes(y = rowname, yend = rowname, x=lowerlimit , xend=upperlimit, color = type)) + geom_vline(xintercept = 0, linetype = "dashed", color = "red") + theme(legend.position = "bottom") + facet_wrap(vars(trait,  treatment), nrow = 1, scales = "free_x" ,               labeller = function (labels) { 
+labels <- lapply(labels, as.character) 
+list(do.call(paste, c(labels, list(sep = "\n"))))
+}) + 
+  theme(legend.title=element_blank()) + labs(y = "") + 
+  theme(text = element_text(size=8))
  
 daa_virome_host_combined_plot
 ```
@@ -123,11 +129,15 @@ daa_virome_host_combined_plot
 ```{r}
 anno_df <- tibble(trait = c("Concentrate level", "Methane emission"), treatment = c("High vs. Medium", "High vs. Low"))
 daa_virome_host_combined_plot_final <- daa_virome_host_combined_plot +  ## add arrow to show significant host daa
-  geom_segment(data = anno_df, x= c(-1.674, -1.326), xend = c(-1.674, -1.326), y = c(18,13), yend = c(19.6,14.6), arrow = arrow(length = unit(0.2, "cm")), color = "red") 
+  geom_segment(data = anno_df, x= c(-1.674, -1.326), xend = c(-1.674, -1.326), y = c(18,13), yend = c(19.6,14.6), arrow = arrow(length = unit(0.2, "cm")), color = "red") +
+  theme(plot.margin=grid::unit(c(0,0,0,0), "mm"))
 
+svg("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_daa.svg", width = 6.8, height = 5)
 daa_virome_host_combined_plot_final
+dev.off()
 
-ggsave("virome_daa.svg", width = 10, height = 6)
+
+#ggsave("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_daa.svg", width = 7, height = 5)
 ```
 
 # session info

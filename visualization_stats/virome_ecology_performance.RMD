@@ -36,8 +36,8 @@ library(gridExtra)
 # Load data
 
 ```{r}
-raw_table <- fread('abundance_table_raw.csv')  ## use data table to improve speed
-bp <- read.csv('samples_basepair.txt', header = FALSE, sep = '\t')  ## virus identified from contigs > 5000 bp. Therefore, the viral richness data may be covariated by the number of contig > 5000
+raw_table <- fread('/fs/ess/PAS0439/MING/virome_ecology/results/R_project/abundance_table_raw.csv')  ## use data table to improve speed
+bp <- read.csv('/fs/ess/PAS0439/MING/virome_ecology/results/R_project/samples_basepair.txt', header = FALSE, sep = '\t')  ## virus identified from contigs > 5000 bp. Therefore, the viral richness data may be covariated by the number of contig > 5000
 colnames(bp) <- c("samples", "bp")
 samples <- unlist(bp["samples"])
 richness_raw <- colSums(raw_table[, ..samples] > 0) %>% transform()
@@ -47,11 +47,11 @@ richness_raw <- rownames_to_column(richness_raw, var = "samples")
 richness_normalized <- left_join(richness_raw, bp, by="samples")
 richness_normalized["richness_normalized"] = richness_normalized["richness"]/richness_normalized["bp"]*1000000000 ## normalizing the richness profile to the same sequencing effort 
 
-metadata_animal_performance <- read_csv("metadata_animal_performance.csv")
-metadata_ecology <- read_csv("metadata_ecology.csv")  
+metadata_animal_performance <- read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/metadata_animal_performance.csv")
+metadata_ecology <- read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/metadata_ecology.csv")  
 
 
-table_beta_performance <- fread("for_beta_diversity_performance.csv")
+table_beta_performance <- fread("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/for_beta_diversity_performance.csv")
 
 metadata_columns <- c("animal","id", "trait", "treatment", "study", "liter","breed")
 metadata_columns_stats <- c("animal","id", "trait", "study", "liter")
@@ -95,13 +95,13 @@ stat.performance %>% filter(!(group1 == "HLS" & group2 == "Grazing")) %>%
 ```{r}
 diet_study <- c("PRJEB21624", "PRJNA492173", "PRJEB23561")
 
-species_color <- c("#e03f34", "#24b1ed", "#fa7107", "#24ed67")
+species_color <- c("#e03f34", "#24b1ed", "#e13bed", "#24ed67")
 names(species_color) <- c("Beef", "Dairy", "Sheep", "Goat")
 
 p <- richness_ready_performance %>% ggplot() + 
   aes(x=treatment, y= richness_normalized) + geom_boxplot(aes(color = animal))+
     theme(legend.position = "bottom") + labs(color = "Species") + 
-  scale_color_manual(name = "Species", values = species_color)
+  scale_color_manual(name = "Species", values = species_color) 
 
 
 richness_legend <- get_legend(p)
@@ -116,15 +116,11 @@ richness_ready_performance[richness_ready_performance$study == "PRJNA492173","tr
                list(do.call(paste, c(labels, list(sep = "\n"))))
              }) + 
   labs(x = "", y = "Richness per billion bp") +  labs(color = "Species") +
-  geom_jitter(size = 1, width = 0.2, height = 0.2, aes(color = animal)) + 
+  geom_jitter(size = 0.8, width = 0.2, height = 0.2, aes(color = animal)) + 
   scale_y_continuous(expand = expansion(mult = c(0, 0.15)))  + 
   theme_minimal()+
     theme(legend.position = "none") + 
-  scale_color_manual(name = "animal", values = species_color) #+
-  #labs(tag = "A") + 
-  #theme(plot.tag.position = c(0, 0.97)) +
-  #theme(plot.tag = element_text(face = "bold", size = 12))
-
+  scale_color_manual(name = "animal", values = species_color) 
 
 
 richness_box_phenotype <- richness_ready_performance %>% filter(!study %in% diet_study) %>% ggplot() + 
@@ -134,38 +130,43 @@ richness_box_phenotype <- richness_ready_performance %>% filter(!study %in% diet
                list(do.call(paste, c(labels, list(sep = "\n"))))
              }) + 
   labs(x = "", y = "Richness per billion bp") +  labs(color = "Species") +
-  geom_jitter(size = 1, width = 0.2, height = 0.2, aes(color = animal)) + 
+  geom_jitter(size = 0.8, width = 0.2, height = 0.2, aes(color = animal)) + 
   scale_y_continuous(expand = expansion(mult = c(0, 0.15)))  + 
   theme_minimal()+
     theme(legend.position = "none") + 
-  scale_color_manual(name = "animal", values = species_color) #+ 
-  #labs(tag = "B") + 
-  #theme(plot.tag.position = c(0, 0.97)) +
-  #theme(plot.tag = element_text(face = "bold", size = 12))
+  scale_color_manual(name = "animal", values = species_color)
 
 
 ## add annotations when significant
 virome_richness_diet <- richness_box_diet +
    geom_curve(data=tibble(trait = "Concentrate level"), aes(x=1, xend=2, y=175, yend=175), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Concentrate level"), aes(x=1.5, y=190, label = "**" ), size=5) + 
+  geom_text(data=tibble(trait = "Concentrate level"), aes(x=1.5, y=190, label = "**" ), size=4) + 
   geom_curve(data=tibble(trait = "Dietary composition (goat)"), aes(x=1, xend=3, y=125, yend=125), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=2, y=135, label = "***" ), size=5) + 
+  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=2, y=135, label = "***" ), size=4) + 
   geom_curve(data=tibble(trait = "Dietary composition (goat)"), aes(x=2, xend=3, y=105, yend=105), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=2.5, y=110, label = "*" ), size=5) +
+  geom_text(data=tibble(trait = "Dietary composition (goat)"), aes(x=2.5, y=110, label = "*" ), size=4) +
   geom_curve(data=tibble(trait = "Dietary composition (cattle)"), aes(x=1, xend=2, y=135, yend=135), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Dietary composition (cattle)"), aes(x=1.5, y=145, label = "***" ), size=5) +
+  geom_text(data=tibble(trait = "Dietary composition (cattle)"), aes(x=1.5, y=145, label = "***" ), size=4) +
   geom_curve(data=tibble(trait = "Dietary composition (cattle)"), aes(x=3, xend=4, y=45, yend=45), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Dietary composition (cattle)"), aes(x=3.5, y=55, label = "***" ), size=5) 
+  geom_text(data=tibble(trait = "Dietary composition (cattle)"), aes(x=3.5, y=55, label = "***" ), size=4) + 
+  theme(text = element_text(size=8)) 
           
 virome_richness_phenotype <- richness_box_phenotype +
   geom_curve(data=tibble(trait = "Methane emission"), aes(x=1, xend=2, y=102, yend=102), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Methane emission"), aes(x=1.5, y=107, label = "***" ), size=5) +
+  geom_text(data=tibble(trait = "Methane emission"), aes(x=1.5, y=107, label = "***" ), size=4) +
   geom_curve(data=tibble(trait = "Average daily gain"), aes(x=1, xend=2, y=145, yend=145), curvature = -0.1) +
-  geom_text(data=tibble(trait = "Average daily gain"), aes(x=1.5, y=155, label = "*" ), size=5)    
+  geom_text(data=tibble(trait = "Average daily gain"), aes(x=1.5, y=155, label = "*" ), size=4)   + 
+  theme(text = element_text(size=8)) 
 
-virome_richness <- ggarrange(virome_richness_diet, virome_richness_phenotype, richness_legend, nrow = 3, heights = c(1,2, 0.2))
-virome_richness
-ggsave("virome_richness.svg", width = 8, height = 5)
+ggarrange(richness_legend, nrow = 1, heights = 0.2) # save figure legend as obj
+ggsave("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_legend.svg", width = 5, height = 0.8)
+
+virome_richness_diet
+ggsave("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_richness_diet.svg", width = 4.5, height = 1.5)
+
+virome_richness_phenotype
+ggsave("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_richness_phenotype.svg", width = 4.5, height = 2.5)
+
 ```
 
 ### beta-diversity per study based
@@ -288,27 +289,24 @@ function_pcoa <- function(literature){ PCOA_df %>% filter(liter == literature) %
         axis.text.y = element_blank())  +
   scale_x_continuous(name = paste("Axis 1 (", round(variance_explained[variance_explained$liter==literature,"x"]*100, 2), "%)", sep = "")) +
   scale_y_continuous(name = paste("Axis 2 (", round(variance_explained[variance_explained$liter==literature,"y"]*100, 2), "%)", sep = "")) +
-  theme(text = element_text(size=8)) +
-  theme(strip.text.x = element_text(size = 8)) + # Change font size of facet strip
    theme_minimal() +
     theme(legend.position = "bottom") +
     theme(legend.title = element_blank(), 
-               legend.text = element_text(size = 8)) +
+               text = element_text(size=8)) +
     theme(legend.margin=margin(0,0,0,0),  ## reduce space between the legend and the figure
-        legend.box.margin=margin(-10,-10,-10,-10)) +
-    theme(axis.title=element_text(size=8))
+        legend.box.margin=margin(-10,-10,-10,-10))
 }
 
 pcoa_plots <- lapply(unique(PCOA_df$liter), function_pcoa)
 
 names(pcoa_plots) <- unique(PCOA_df$liter)
 
-pcoa_plots[["Shi et al., 2014"]] <- pcoa_plots[["Shi et al., 2014"]] + annotate("text", -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 3)  # hjust and vjust are defined between 0 and 1, min to max
-pcoa_plots[["Li et al., 2019"]] <- pcoa_plots[["Li et al., 2019"]] + annotate("text", -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 3)
-pcoa_plots[["Li et al., 2020"]] <- pcoa_plots[["Li et al., 2020"]] + annotate("text", -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 3) 
-pcoa_plots[["Stewart et al., 2018"]] <- pcoa_plots[["Stewart et al., 2018"]] + annotate("text",  -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 3) 
-pcoa_plots[["Xue et al., 2020"]] <- pcoa_plots[["Xue et al., 2020"]] + annotate("text",  -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: *", size = 3) 
-pcoa_plots[["Lu et al., 2019"]] <- pcoa_plots[["Lu et al., 2019"]] + annotate("text",  -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 3) 
+pcoa_plots[["Shi et al., 2014"]] <- pcoa_plots[["Shi et al., 2014"]] + annotate("text", -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 2)  # hjust and vjust are defined between 0 and 1, min to max
+pcoa_plots[["Li et al., 2019"]] <- pcoa_plots[["Li et al., 2019"]] + annotate("text", -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 2)
+pcoa_plots[["Li et al., 2020"]] <- pcoa_plots[["Li et al., 2020"]] + annotate("text", -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 2) 
+pcoa_plots[["Stewart et al., 2018"]] <- pcoa_plots[["Stewart et al., 2018"]] + annotate("text",  -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 2) 
+pcoa_plots[["Xue et al., 2020"]] <- pcoa_plots[["Xue et al., 2020"]] + annotate("text",  -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: *", size = 2) 
+pcoa_plots[["Lu et al., 2019"]] <- pcoa_plots[["Lu et al., 2019"]] + annotate("text",  -Inf, -Inf, hjust = 0, vjust = 0, label = "Permanova: ***", size = 2) 
  
 #pcoa_final <- plot_grid(pcoa_plots[[1]], pcoa_plots[[2]],pcoa_plots[[3]],pcoa_plots[[4]],pcoa_plots[[5]],pcoa_plots[[6]],pcoa_plots[[7]],pcoa_plots[[8]],pcoa_plots[[9]])
 
@@ -320,9 +318,9 @@ pcoa_phenotype <- ggarrange(pcoa_plots$`Anderson et al., 2021`, pcoa_plots$`Shi 
 
 ## adjust tag position, https://stackoverflow.com/questions/54207695/put-tag-without-losing-space-for-actual-chart 
 
-pcoa_final <- ggarrange(pcoa_diet, pcoa_phenotype, nrow = 2, heights = c(1, 2))
+pcoa_final <- ggarrange(pcoa_diet, pcoa_phenotype, nrow = 2, heights = c(1, 2)) 
 pcoa_final
-ggsave("virome_pcoa.svg", width = 8, height = 5)
+ggsave("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_pcoa.svg", width = 7, height = 5)
 ```
 
 
