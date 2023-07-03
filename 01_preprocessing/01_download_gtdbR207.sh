@@ -10,14 +10,13 @@
 
 START=$SECONDS
 
-cd /fs/scratch/PAS0439/Ming/faa
 
 module load python/3.6-conda5.2
 source activate axel
 
-cd /fs/scratch/PAS0439/Ming/databases/kraken2_gtdb207_rgut6000
+cd /fs/scratch/PAS0439/Ming/databases/kraken2_gtdb207_rgut_full
 
-axel -n 40 http://ftp.tue.mpg.de/ebio/projects/struo2/GTDB_release207/kraken2/hash.k2d
+axel -n 40 https://data.gtdb.ecogenomic.org/releases/release207/207.0/genomic_files_reps/gtdb_genomes_reps_r207.tar.gz
 
 DURATION=$(( SECONDS - START ))
 
