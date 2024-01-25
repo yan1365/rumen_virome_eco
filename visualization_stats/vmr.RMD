@@ -1,0 +1,76 @@
+---
+title: "vmr"
+author: "Ming Yan"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_download: true
+---
+
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+## Load libraries
+```{r}
+library(tidyverse)
+library(rstatix)
+library(ggpubr)
+```
+
+## get significant viral-host linkage
+```{r}
+df = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/vmr_ready.csv")
+
+padj_df = data_frame()
+
+for (f in unique(df$study)){
+  tmp = df[df$study == f,]
+  trait = unique(tmp$trait)
+  study = unique(tmp$study)
+  sign_taxa = tmp %>% group_by(species, Contig) %>% wilcox_test(vmr ~ treatment) %>% adjust_pvalue(method = "bonferroni") %>% filter(p.adj < 0.1)
+  sign_taxa$trait = trait
+  sign_taxa$study = study
+  padj_df = rbind(padj_df, sign_taxa)
+}
+
+```
+
+## plot
+```{r}
+df_plot = data_frame()
+for (f in 1:nrow(padj_df)){
+  Viral = unname(unlist(padj_df[f,"Contig"]))
+  Host = unname(unlist(padj_df[f,"species"]))
+  Study = unname(unlist(padj_df[f,"study"]))
+  tmp = df %>% filter(study == Study  & Contig == Viral & species == Host)
+  df_plot = rbind(df_plot, tmp)
+}
+
+
+
+methane_plot = df_plot %>% filter(study == "PRJNA202380") %>%  ggplot(aes(x = treatment, y = vmr)) + geom_boxplot() + geom_jitter() + facet_wrap(~species + Contig, scales = "free") + labs(x = "", y = "", title = "Methane emission") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+ theme(text = element_text(size=8)) +
+theme(plot.margin=grid::unit(c(0,0,0,0), "mm"))
+
+diet_plot = df_plot %>% filter(study == "PRJNA492173_basal_nfc") %>%  ggplot(aes(x = treatment, y = vmr)) + geom_boxplot() + geom_jitter() + facet_wrap(~species + Contig, scales = "free") + labs(x = "", y = "", title = "") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+ theme(text = element_text(size=8)) +
+theme(plot.margin=grid::unit(c(0,0,0,0), "mm"))
+
+# No significant results for methane with the q threshold of 0.05 
+#plot_ready = ggarrange(diet_plot, methane_plot, nrow = 2, heights = c(2,1.1))
+diet_plot
+ggsave("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/vmr_diet.svg", width = 3.5, height = 3.5, units = "in")
+```
+
+
+

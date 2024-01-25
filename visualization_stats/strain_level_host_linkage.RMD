@@ -1,0 +1,122 @@
+---
+title: "strain level host linkage"
+author: "Ming Yan"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_download: true
+---
+
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# Load libraries
+```{r}
+library(tidyverse)
+library(igraph)
+library(stringr)
+library(RColorBrewer)
+```
+
+# construct network
+```{r}
+network_pre = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/inter_intra_species_specificity.csv")
+
+microbe_vertices = unique(network_pre$user_genome)
+phage_vertices = na.omit(unique(network_pre$sseqid))
+vertices_ids = seq(length(microbe_vertices) + length(phage_vertices))
+vertices_type = c(rep("microbe", length(microbe_vertices)), rep("phage", length(phage_vertices)))
+
+vertices_df = data_frame(vertices_name = c(microbe_vertices, phage_vertices), 
+                         vertices_ids = vertices_ids, vertices_type = vertices_type)
+
+edges_pre = network_pre[!is.na(network_pre$sseqid),]
+
+
+g = make_empty_graph(directed = FALSE)
+g <- add_vertices(g, length(vertices_ids)) 
+
+for(i in 1:nrow(edges_pre)) {   
+  vertice1 = edges_pre[i,"user_genome"] %>% unlist()
+  vertice2 = edges_pre[i,"sseqid"] %>% unlist()
+  vertice_id1 = vertices_df[vertices_df$vertices_name == vertice1, "vertices_ids"]
+  vertice_id2 = vertices_df[vertices_df$vertices_name == vertice2, "vertices_ids"]
+  
+  g <- add_edges(g, edges = c(vertice_id1, vertice_id2))
+ 
+}
+```
+
+
+## add attributes to the network
+```{r}
+# give vertice name, return species, for microbe vertices
+species_list = c(unique(network_pre$Species), "phage")
+species_color = c(brewer.pal((length(species_list) - 1), "Set1"), "black")
+names(species_color) = species_list
+
+## define vertices color by species
+find_species <- function(x) {
+  genome = x
+  species = unlist(unique(network_pre[network_pre$user_genome == genome, "Species"]))
+  if (length(species) == 0){
+    return("phage")
+  }
+  else{
+    return(species[[1]])
+  }
+}
+
+vertice_species = vertices_df$vertices_name %>% sapply(find_species)
+vertice_color = c()
+for (f in vertice_species){
+  color = species_color[f]
+  vertice_color = c(vertice_color, color)
+}
+
+V(g)$color = vertice_color
+
+
+## define vertices shape by phages or microbes
+V(g)$shape <- ifelse(vertices_df$vertices_type == "microbe", "circle", "rectangle")
+
+##
+
+G_Grouped = g
+
+V(g)$group1 = as.numeric(as.factor(vertice_color))
+E(G_Grouped)$weight = 1
+
+for(i in unique(V(g)$group1)) {
+    GroupV = which(V(g)$group1 == i)
+    G_Grouped = add_edges(G_Grouped, combn(GroupV, 2), attr=list(weight=5))
+} 
+
+
+LO = layout_with_fr(G_Grouped)
+
+plot(g, layout=LO)
+
+```
+
+
+```{r}
+library(visNetwork)
+
+gg = toVisNetworkData(g)
+
+gg$nodes$group = gg$nodes$shape
+visNetwork(nodes = gg$nodes, edges = gg$edges,  height = "800px") %>%
+  visGroups(groupname = "circle", shape = "icon", icon = list(code = "f0c0")) %>% 
+  #visGroups(groupname = "rectangle", shape = "rectangle") %>%
+  addFontAwesome()
+```
+
+
+

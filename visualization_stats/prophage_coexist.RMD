@@ -1,0 +1,42 @@
+---
+title: "species multiple population co-exist"
+author: "Ming Yan"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_download: true
+---
+
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# Load libraries
+```{r}
+library(tidyverse)
+```
+
+
+# plot
+```{r}
+df = read.csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/prophage_co_exist_present_percent.csv")
+df_ready = df %>% group_by(prophage_carrying) %>% summarise(n = n())
+df_ready = df_ready %>% add_row(prophage_carrying = 0, n = 81)
+                                
+df_ready %>% ggplot(aes(x= prophage_carrying, y = n)) + geom_col() + 
+  theme_bw()  + 
+  labs(x = "# Species prophage-carrying population\nco-exist with population without prophage", y = "# Samples") +
+    theme(text = element_text(size=7),
+        axis.text.x = element_text(size=7),
+        axis.text.y = element_text(size=7),
+        axis.title.x = element_text(size=7),
+        axis.title.y = element_text(size=7)
+        ) 
+
+ggsave("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/prophage_carrying_prevalence.svg", width = 3, height = 1.8, units = "in")
+```

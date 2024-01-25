@@ -1,0 +1,422 @@
+---
+title: "microbe_SpiecEasi"
+author: "Ming Yan"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    code_download: true
+---
+
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# Load libraries
+```{r}
+library(tidyverse)
+library(SpiecEasi)
+library(igraph)
+library(stringr)
+library(RColorBrewer)
+```
+
+## R Markdown
+```{r}
+library(tidyverse)
+library(SpiecEasi)
+
+microbe_50 = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/microbes_prevalence_filtered_50.csv")
+virome_50 = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/virome_prevalence_filtered_50.csv")
+microbe_taxa = read_csv("/fs/ess/PAS0439/MING/databases/hungate_rug_rumen_mags_taxa.csv")
+core_genus_df = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/core_genus_abundant.csv")
+core_species_df = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/core_species_taxa.csv")
+rvd_host = read_tsv("/fs/ess/PAS0439/MING/virome/checkv_trimmed_for_dowmstream/RVD_resources/host_match.tsv")
+rvd_host$species = gsub("s__", "", rvd_host$species)
+se.micro_50 = readRDS("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/se.micro_50.rds")
+se.rvd_50 = readRDS("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/se.rvd_50.rds")
+core_genus = core_genus_df %>% select(Genera) %>% unlist()
+
+taxa = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/taxa.csv")
+
+```
+
+```{r}
+# color nodes based on phylum
+find_phylum <- function(x) {
+   Phylum = taxa %>%  filter(Species == x) %>% select(Phylum) %>% unique() %>% unlist()
+   
+   if(length(Phylum) == 0 ){
+     return("Unknown")
+   }
+   else if(Phylum == "Methanobacteriota"){
+      return("Archaea")
+   }else{
+     return(Phylum)
+   }
+   
+}
+
+find_host_phylum <- function(x) {
+   Phylum = rvd_host %>%  filter(sseqid == x) %>% select(phylum) %>% unique() %>% unlist()
+   
+   if(length(Phylum) == 0 ){
+     return("Unknown")
+   }
+   else if(str_split(Phylum, "__")[[1]][2] == "Methanobacteriota"){
+      return("Archaea")
+   } else{
+     return(str_split(Phylum, "__")[[1]][2])
+   }
+   
+}
+
+```
+
+
+## preprocessing
+```{r}
+
+microbe_phylum_50 <-  sapply(colnames(microbe_50)[2:ncol(microbe_50)], find_phylum) 
+micro_phylum = unique(microbe_phylum_50)
+rvd_host_phylum <- sapply(colnames(virome_50)[2:ncol(virome_50)], find_host_phylum)  
+
+mycolors_50 = c("#4DAF4A", "#984EA3", "#FF7F00", "grey", "#1F78B4", "#B2DF8A", "black", "#FB9A99", "#E31A1C",
+                "#FDBF6F", "#8DD3C7", "#FFFFB3", "#1c8a94", "#FB8072", "#80B1D3", "#FDB462", "#fcba03")
+names(mycolors_50) = c("Firmicutes_C", "Bacteroidota", "Firmicutes_A", "Unknown", "Spirochaetota",     
+ "Verrucomicrobiota", "Archaea", "Proteobacteria", "Actinobacteriota", "Chloroflexota",     
+ "Firmicutes", "Fibrobacterota", "Cyanobacteria", "Planctomycetota", "Desulfobacterota_I", "Thermoplasmatota", "Synergistota")
+ 
+phylum = c(rvd_host_phylum, microbe_phylum_50)
+
+
+for (f in 1:length(mycolors_50)){
+     phy = names(mycolors_50)[f]
+     col = mycolors_50[f]
+   
+   phylum = sapply(phylum, function(x){
+      gsub(phy, col, x)
+   })
+   }
+    
+core_species = intersect(core_species_df$Species, colnames(microbe_50))
+
+microbe_node_size_50 = c()
+for (f in colnames(microbe_50)[2:ncol(microbe_50)]){
+   if (f %in% core_species){
+      microbe_node_size_50 = c(microbe_node_size_50,6)
+   }else {
+      microbe_node_size_50 = c(microbe_node_size_50,4)
+   }
+}
+
+
+
+```
+
+## network microbe only 
+```{r}
+
+igraph.micro_50 = adj2igraph(getRefit(se.micro_50))
+igraph.rvd_50 = adj2igraph(getRefit(se.rvd_50))
+
+V(igraph.micro_50)$phylum_color = microbe_phylum_50
+
+
+mn_modularity = fastgreedy.community(igraph.micro_50)
+
+mn_table = table(mn_modularity$membership)
+module_kept_mn = names(mn_table[mn_table > rev(sort(mn_table))[4]]) # kept the largest 3 modules 
+vertices_kept_mn = which(mn_modularity$membership %in% module_kept_mn)
+
+mn_membership_v = mn_modularity$membership
+names(mn_membership_v) = mn_modularity$names
+
+module_kept_list_mn = list()
+for (f in 1:length(module_kept_mn)){
+   module = module_kept_mn[f]
+   module_kept_list_mn[[f]] = names(mn_membership_v[mn_membership_v == module])
+}
+
+E(igraph.micro_50)$color = "blue"
+
+set.seed(1)
+svg(filename="/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/microbial_network_50_prevalence.svg", width = 3.5, height = 3.5)
+par(mar = c(0.1, 0.1, 0.1, 0.1))
+plot(igraph.micro_50, vertex.size=microbe_node_size_50, vertex.label = NA,
+     vertex.color=phylum[(length(rvd_host_phylum)+1):length(phylum)],
+     mark.groups=module_kept_list_mn, 
+     mark.col = rainbow(length(module_kept_list_mn), alpha = 0.3), 
+     mark.expand=0,
+     mark.border=NA
+     )
+dev.off() 
+```
+
+## microbial network modularity and assortativity 
+```{r}
+V(igraph.micro_50)$phylum_as_numeric = as.numeric(factor(phylum[(length(rvd_host_phylum)+1):length(phylum)]))
+assortativity(igraph.micro_50, V(igraph.micro_50)$phylum_as_numeric, directed=F)
+
+mn_modularity
+
+```
+
+## def attribute for cross-domain network
+```{r}
+Type = c(rep("Virus", ncol(virome_50) - 1), rep("Microbe", ncol(microbe_50) - 1))
+
+V(igraph.rvd_50)$Type = Type
+V(igraph.rvd_50)$phylum_color = phylum
+
+
+E(igraph.rvd_50)[1:570 %--% 1:570 ]$type = "vtov"
+E(igraph.rvd_50)[571:1241 %--% 571:1241 ]$type = "mtom"
+E(igraph.rvd_50)[1:571 %--% 571:1241 ]$type = "vtom"
+
+edge_color = c()
+for (f in E(igraph.rvd_50)$type){
+   if (f == "vtov"){
+      edge_color = c(edge_color, "green")
+   } else if (f == "vtom"){
+      edge_color = c(edge_color, "red")
+   } else {
+     edge_color = c(edge_color, "blue") 
+   }
+}
+
+E(igraph.rvd_50)$color = edge_color
+
+microbe_node_size = c()
+for (f in colnames(microbe_50)[2:ncol(microbe_50)]){
+   if (f %in% core_species){
+      microbe_node_size = c(microbe_node_size,6)
+   }else {
+      microbe_node_size = c(microbe_node_size,4)
+   }
+}
+
+core_species_rvd = rvd_host %>% filter(species %in% core_species) %>% select(sseqid)
+
+virome_node_size = c()
+for (f in colnames(virome_50)[2:ncol(virome_50)]){
+   if (f %in% core_species_rvd){
+      virome_node_size = c(virome_node_size,6)
+   }else {
+      virome_node_size = c(virome_node_size,4)
+   }
+}
+
+vertex_size_v = c(virome_node_size, microbe_node_size)
+
+
+```
+
+## add module info 
+```{r}
+cdn_modularity = fastgreedy.community(igraph.rvd_50)
+
+cdn_table = table(cdn_modularity$membership)
+module_kept = names(cdn_table[cdn_table > rev(sort(cdn_table))[4]]) # kept the largest 3 modules  
+vertices_kept = which(cdn_modularity$membership %in% module_kept)
+
+cdn_membership_v = cdn_modularity$membership
+names(cdn_membership_v) = cdn_modularity$names
+
+module_kept_list = list()
+for (f in 1:length(module_kept)){
+   module = module_kept[f]
+   module_kept_list[[f]] = names(cdn_membership_v[cdn_membership_v == module])
+}
+
+
+set.seed(1)
+svg(filename="/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/cross_domain_network_50_prevalence.svg", width = 3.5, height = 3.5)
+par(mar = c(0.1, 0.1, 0.1, 0.1))
+
+plot(igraph.rvd_50, vertex.size=vertex_size_v, vertex.label = NA, 
+     vertex.shape=ifelse(V(igraph.rvd_50)$Type == "Virus", "square", "circle"),
+     vertex.color=phylum,
+     mark.groups=module_kept_list, 
+     mark.col = c("#0000FF4D","#FF00004D", "#00FF004D"),
+     mark.border=NA,
+      mark.expand=0
+     )
+dev.off() 
+```
+
+```{r}
+V(igraph.rvd_50)$phylum_as_numeric = as.numeric(factor(phylum))
+assortativity(igraph.rvd_50, V(igraph.rvd_50)$phylum_as_numeric, directed=F)
+
+cdn_modularity
+```
+
+## get average degree between any two bacterial nodes, cross-domain network vs. microbial only network 
+```{r}
+
+cdn_degree = read_csv("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/cdn_degree_50.csv")
+mn_degree = data_frame(node = names(degree(igraph.micro_50)), degree = degree(igraph.micro_50))
+
+df = merge(cdn_degree, mn_degree, by = "node")
+
+colnames(df) = c("node", "cross_domain", "microbial")
+df_ready = df %>% pivot_longer(c(cross_domain, microbial), names_to = "type", values_to = "degree")
+
+
+t.test(df$cross_domain, df$microbial, paired = TRUE, alternative = "greater")
+
+mean(df$cross_domain)
+sd(df$cross_domain)
+
+mean(df$microbial)
+sd(df$microbial)
+```
+
+## number of singleton 
+```{r}
+df %>% filter(cross_domain == 0) %>% nrow()
+df %>% filter(microbial == 0) %>% nrow()
+```
+
+## keystone species
+```{r}
+bet = betweenness(igraph.rvd_50)
+deg = degree(igraph.rvd_50)
+microbe_species = colnames(microbe_50)[2:ncol(microbe_50)]
+votus = colnames(virome_50)[2:ncol(virome_50)]
+species = c(votus, microbe_species)
+type = c(rep("Virus", length(votus)), rep("Microbe", length(microbe_species)))
+
+keystone = data.frame(betweenness = bet, degree = deg, species = species, type = type, phylum = phylum)
+
+keystone %>% ggplot(aes(degree, betweenness)) + geom_point(aes(color = phylum)) + 
+  scale_color_identity(guide = "legend") + facet_wrap(~ type) +
+   theme_bw() +
+   theme(legend.position =  "none") +
+   theme(text = element_text(size=10),
+   axis.text.x = element_text(size=8),
+   axis.text.y = element_text(size=8),
+   axis.title.x = element_text(size=8),
+   axis.title.y = element_text(size=8)
+) 
+  
+ggsave("/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/keystone_species.svg", width = 7, height = 4)
+
+```
+
+## cross-domain network too crowded, seperated to see details.
+```{r}
+set.seed(1)
+## 3,4,6
+g = igraph.rvd_50
+c =  fastgreedy.community(igraph.rvd_50)
+l <- layout_nicely(g)
+
+module1_id = 3
+module2_id = 4
+module3_id = 6
+
+module1_v_idxs <- which(c$membership == module1_id)
+module2_v_idxs <- which(c$membership == module2_id)
+module3_v_idxs <- which(c$membership == module3_id)
+
+g_sub_module1 <- induced_subgraph(g, V(g)[module1_v_idxs])
+g_sub_module2 <- induced_subgraph(g, V(g)[module2_v_idxs])
+g_sub_module3 <- induced_subgraph(g, V(g)[module3_v_idxs])
+
+
+module1_edge_col = c()
+for (f in E(g_sub_module1)$type){
+   if (f == "vtov"){
+      module1_edge_col = c(module1_edge_col, "green")
+   } else if (f == "vtom"){
+      module1_edge_col = c(module1_edge_col, "red")
+   } else {
+     module1_edge_col = c(module1_edge_col, "blue") 
+   }
+}
+
+
+module2_edge_col = c()
+for (f in E(g_sub_module2)$type){
+   if (f == "vtov"){
+      module2_edge_col = c(module2_edge_col, "green")
+   } else if (f == "vtom"){
+      module2_edge_col = c(module2_edge_col, "red")
+   } else {
+     module2_edge_col = c(module2_edge_col, "blue") 
+   }
+}
+
+module3_edge_col = c()
+for (f in E(g_sub_module3)$type){
+   if (f == "vtov"){
+      module3_edge_col = c(module3_edge_col, "green")
+   } else if (f == "vtom"){
+      module3_edge_col = c(module3_edge_col, "red")
+   } else {
+     module3_edge_col = c(module3_edge_col, "blue") 
+   }
+}
+
+set.seed(1)
+svg(filename="/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/cross_domain_network_50_prevalence_module1.svg", width = 2.5, height = 2.5, bg = "transparent")
+par(mar = c(0.1, 0.1, 0.1, 0.1))
+plot(g_sub_module1,
+  layout = l[module1_v_idxs, ],
+  edge.color = module1_edge_col,
+  mark.border = NA,
+  mark.col = rainbow(3, alpha = 0.3)[2],
+  mark.groups = V(g_sub_module1),
+  vertex.label = NA,
+  vertex.color=phylum[module1_v_idxs],
+  vertex.size=vertex_size_v[module1_v_idxs], vertex.label = NA, 
+   vertex.shape=ifelse(V(g_sub_module1)$Type == "Virus", "square", "circle")
+)
+dev.off()
+
+
+set.seed(1)
+svg(filename="/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/cross_domain_network_50_prevalence_module2.svg", width = 2.5, height = 2.5, bg = "transparent")
+par(mar = c(0.1, 0.1, 0.1, 0.1))
+plot(g_sub_module2,
+  layout = l[module2_v_idxs, ],
+  edge.color = module2_edge_col,
+  mark.border = NA,
+  mark.col = rainbow(3, alpha = 0.3)[1],
+  mark.groups = V(g_sub_module2),
+  vertex.label = NA,
+  vertex.color=phylum[module2_v_idxs],
+  vertex.size=vertex_size_v[module2_v_idxs], vertex.label = NA, 
+   vertex.shape=ifelse(V(g_sub_module2)$Type == "Virus", "square", "circle")
+)
+dev.off()
+
+set.seed(1)
+svg(filename="/fs/ess/PAS0439/MING/virome_ecology/results/R_project/virome_microbes_network_RUG4941/cross_domain_network_50_prevalence_module3.svg", width = 2.5, height = 2.5, bg = "transparent")
+par(mar = c(0.1, 0.1, 0.1, 0.1))
+module3_plot = plot(g_sub_module3,
+  layout = l[module3_v_idxs, ],
+  edge.color = module3_edge_col,
+  mark.border = NA,
+  mark.col = rainbow(3, alpha = 0.3)[3],
+  mark.groups = V(g_sub_module3),
+  vertex.label = NA,
+  vertex.color=phylum[module3_v_idxs],
+  vertex.size=vertex_size_v[module3_v_idxs], vertex.label = NA, 
+   vertex.shape=ifelse(V(g_sub_module3)$Type == "Virus", "square", "circle")
+)
+dev.off()
+
+
+```
+
+
+
+
+
